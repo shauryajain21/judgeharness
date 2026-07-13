@@ -53,9 +53,23 @@ gemini-flash + rubric-v3        0.88        0.95        0.03     $0.0004
 
 Stop trusting your judge on vibes. Measure it.
 
+## Two tiers of judge trust
+
+- **Behavioral** (black-box, any API model, ships first) — causal input/rubric
+  perturbations: order-swap, criterion ablation, authority injection, cross-generator.
+- **Mechanistic** (white-box, open-weight only, the moat) — read the judge's
+  *unspoken* reasoning with the logit/Jacobian lens and SAE features.
+
+> A trustworthy judge isn't one with a nice-sounding rationale — it's one whose
+> *unspoken* workspace agrees with its verdict.
+
 ## Status
 
-Early / brainstorm stage. Design notes live in [`DESIGN.md`](./DESIGN.md).
+Early / brainstorm stage.
+
+- Design notes: [`DESIGN.md`](./DESIGN.md)
+- Full knowledge base (vision, decisions, trust metrics, interpretability
+  research, technique→check mapping): [`knowledge-base/`](./knowledge-base/)
 
 ## License
 
