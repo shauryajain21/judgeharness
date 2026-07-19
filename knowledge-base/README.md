@@ -16,6 +16,9 @@ inside the judge" ambition.
 | [`05-technique-to-judge-check.md`](./05-technique-to-judge-check.md) | The core mapping: each technique → a concrete judge-trust check |
 | [`06-architecture.md`](./06-architecture.md) | Harness architecture, core objects, pipeline, CLI |
 | [`07-references.md`](./07-references.md) | Papers, links, reading order |
+| [`08-market-and-pivot.md`](./08-market-and-pivot.md) | Why "eval a judge" doesn't sell; the pivot to certifying verifiers/reward models; adjacent markets |
+| [`09-product-three-layers.md`](./09-product-three-layers.md) | One engine, three surfaces: free grader → OSS CLI → B2B certification |
+| [`10-gtm-yc-and-product-hunt.md`](./10-gtm-yc-and-product-hunt.md) | YC positioning + application drafts; Product Hunt launch plan |
 
 ## The one-paragraph pitch
 
