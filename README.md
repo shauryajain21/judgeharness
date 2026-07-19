@@ -70,6 +70,10 @@ Early / brainstorm stage.
 - Design notes: [`DESIGN.md`](./DESIGN.md)
 - Full knowledge base (vision, decisions, trust metrics, interpretability
   research, technique→check mapping): [`knowledge-base/`](./knowledge-base/)
+- Direction & GTM: the wedge is certifying **verifiers / reward models** (the
+  graders that train AI), shipped as one engine behind three surfaces — a free
+  grader, an OSS CLI, and a B2B certification platform. See knowledge-base
+  [`08`](./knowledge-base/08-market-and-pivot.md)–[`10`](./knowledge-base/10-gtm-yc-and-product-hunt.md).
 
 ## License
 
