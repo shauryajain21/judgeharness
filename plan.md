@@ -127,3 +127,13 @@ The end state isn't "vendor comparison tool" — it's *the trust layer for AI de
 3. v1 scope decision: pick **one** provider category (web search APIs is the obvious first — deep familiarity with the vendor landscape) and **one** interface (CLI/OSS repo).
 4. Build the judge framework: traceable verdicts, customer-tunable rubric, meta-eval (judge-vs-human agreement).
 5. Design partner: 2–3 AI startups willing to run a slice of production traffic through a bake-off.
+
+---
+
+## 11. How we'd implement this (5 points)
+
+- **Ingest + replay harness** — adapters that take production traffic (or synthetic queries) and fan the same inputs across candidate vendors/models, capturing output + latency + cost per call. This is the plumbing; keep it thin.
+- **The judge core** — a traceable LLM judge that scores each output per-criterion with reasoning + evidence attached; config is a YAML rubric (criteria, weights, customer-defined "quality"). Reuse the `knowledge-base/` trust primitives.
+- **Meta-eval (the credibility layer)** — let the customer label ~20 pairs, then show judge-vs-human agreement/consistency/bias right in the report. Ship this as core, not a nice-to-have — it's the transparency thesis made real.
+- **Report + recommendation** — ranked per-vendor results on quality/latency/cost, every score expandable to the judge's reasoning; output "the right vendor for you."
+- **Package as OSS CLI first** — `ingest → sweep → report`, runs locally so sensitive traffic never leaves customer infra; landing page + 2–3 design partners (start with web-search-API bake-offs).
