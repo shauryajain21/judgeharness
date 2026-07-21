@@ -735,3 +735,116 @@ the CLI; and whether rerankers or models is the correct second category.
 
 **Primary sources for §12.5**
 - `github.com/tavily-ai/tavily-search-evals` · `github.com/exa-labs/benchmarks` · Linkup and Parallel published benchmarks
+
+---
+
+# Part III — The distilled version
+
+*Appended July 21, 2026. Written after an adversarial pass on Parts I and II.
+Where this conflicts with Part I or II, **this wins** — Parts I and II are kept as
+the reasoning trail, not the current plan.*
+
+## The one-line change
+
+**Part I sells a want. This sells a must.**
+
+Vendor selection is an optimization impulse. Nobody has a deadline for it, so it's
+a once-a-year purchase with a fuzzy buyer. That single fact is behind every real
+objection to Part I: small budget, one-shot revenue, unclear who signs.
+
+Model deprecation is the same job with a date attached.
+
+## The product
+
+> **Your model dies in 90 days. Prove the replacement is as good — in a day,
+> not a month.**
+
+Same engine Part II specced — replay, checklist judge, paired statistics,
+human-audit correction. Only the trigger changes: a deadline someone else set,
+instead of an impulse we have to manufacture.
+
+The deadlines are real and constant:
+
+| Event | Date |
+|---|---|
+| GPT-4o retired | Apr 3, 2026 |
+| Claude Sonnet 4 / Opus 4 retired | Jun 15, 2026 |
+| Claude Opus 4.1 retires | Aug 5, 2026 |
+| Assistants API removed (migrate or rebuild) | Aug 26, 2026 |
+
+OpenAI gives 6 months' notice for GA models, 3 for specialized, **2 weeks for
+previews**. Anthropic commits to 60 days. This never stops.
+
+What teams do today: 1–4 weeks of shadow traffic at ~2× inference cost across
+~10k cases — or they skip it and hope.
+
+## Why it sells without a paradigm shift
+
+- **They already do this**, by hand, badly. We're faster with error bars. Nothing
+  new to believe.
+- **No adoption curve.** Sold one company at a time. No standard to ratify, no
+  ecosystem, no network effect.
+- **The buyer exists and is funded.** The eng lead who owns the AI product is
+  already paying for this in engineer-weeks.
+- **Recurrence sits on the vendors' calendar, not our upsell deck.** This is the
+  honest answer to "one-shot purchase" — the one that killed the eleven companies
+  in §12.2.
+- **The target list is public.** `endoflife.date`, Quora's model-deprecation
+  tracker, benchr.org/deprecations. GTM is a calendar, not a category.
+
+## Market
+
+| | Size | Basis |
+|---|---|---|
+| **TAM** | **$2.7B (2026) → $9.3B (2030)** | LLM observability + evaluation platform market, 36.2% CAGR. The actual budget line we're paid from — not a stretched "AI spend" number. |
+| **SAM** | **~$450–500M → ~$1.6B (2030)** | Change validation specifically: eval is ~35% of that market, of which ~half is validating a change rather than dev-time iteration. Bottom-up agrees: ~20k companies with production LLM apps × ~$20k/yr ≈ $400M. |
+| **SOM** | **~$9M ARR by year 3** (~2% of SAM) | Yr1 20 × $10k · Yr2 100 × $20k · Yr3 300 × $30k |
+
+Supporting: $1.1B of VC went into LLM observability and eval startups Jan 2024 –
+Apr 2026. Gartner expects LLM observability to reach 50% of GenAI deployments by
+2028, up from 15% today.
+
+## Pricing, and the wedge against incumbents
+
+ACVs of $15–40k are anchored in what people already pay: Braintrust Pro $249/mo
+(enterprise custom), Langfuse Enterprise $2,499/mo (~$30k/yr), LangSmith $39/seat.
+
+**The incumbents' pricing model is hostile to this job.** Braintrust meters scores
+at $2.50/1k; LangSmith meters traces the same way. A real migration validation is
+10k production cases × candidates × order-swaps — tens of thousands of scores
+*before a decision exists*. They were built for dev-time iteration, not
+deadline-driven bulk comparison. We price per migration, which is how the buyer
+already thinks about the problem.
+
+## How the Part I vision survives
+
+It gets earned instead of assumed:
+
+```
+forced migration  →  harness is wired up + labels exist  →  "should we switch
+(deadline, easy sell)   (the expensive part, now paid for)    vendors entirely?"
+                                                              (nearly free to ask)
+```
+
+**Migrations get us in the door and buy the calibration labels. Vendor selection
+is the expansion.** That's the reverse of Part I's ordering — and it's the
+direction where the customer has a deadline instead of a maybe.
+
+## What we stopped believing
+
+| Part I / II claimed | Why it's wrong |
+|---|---|
+| "The moat is an insanely good LLM judge" (§3) | A 2B model with a checklist matches GPT-4o (§12.7e). Judging is commoditized. The moat is the calibration labels and the neutrality position. |
+| Vendor selection is the wedge | It's the expansion. Forced migration is the wedge. |
+| Web-search APIs first | Models first — that's where the deadlines and the budget are. Search stays as a later category. |
+| Continuous monitoring converts one-shot into recurring | That's the story that killed eleven YC companies. The deprecation calendar is the real recurrence engine. |
+| Transparency is the thesis (§1) | It's a founder preference with no buyer evidence. It's a *feature* that makes the report defensible — not a reason anyone buys. |
+
+## Next three things
+
+1. Rebuild v1 around a single forced migration (a real deprecation date, a real
+   customer) rather than a search bake-off.
+2. Land 3 design partners off the current deprecation calendar — they have a
+   deadline, so the ask is easy.
+3. Get one number worth quoting: *"we validated a production model migration in
+   X hours instead of Y weeks, and caught a regression they would have shipped."*
