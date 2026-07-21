@@ -183,3 +183,31 @@ Targeted human reinforcement — and precisely: it reinforces the **rubric + jud
 - **Continuous reinforcement guards against drift.** Because production traffic changes over time, periodically sample fresh cases for human review to catch the judge silently drifting on new distributions.
 
 Net: the human is in the **calibration and disagreement-review loop**, not in every verdict. The judge freezes once agreement is high enough; re-engage the human only when meta-eval agreement drops.
+
+### 11.4 Report + recommendation
+
+Ranked per-vendor results on quality/latency/cost, every score expandable to the judge's reasoning, output "the right vendor for you." What makes the report trustworthy and decision-grade:
+
+- **Trade-offs, not a single winner.** Rarely does one vendor win all three axes. Show the Pareto frontier and "best for X" (best quality / cheapest / fastest / best balanced), so the buyer picks against *their* priority rather than a black-box overall score.
+- **Every score drills down.** Expand any cell → criterion-level scores → judge reasoning → the quoted evidence span → the raw vendor output. Full path from headline number to source. This is the transparency thesis rendered in the UI.
+- **Statistical honesty.** Don't claim "X is better" off 10 queries. Show sample size, confidence intervals, and whether a difference is significant. A close call should *look* close.
+- **The judge grades itself in the report.** Surface the judge's own trust metrics (agreement vs. human labels, consistency, `flip_rate`) alongside the vendor results. The reader must know how much to trust the recommendation before acting on it.
+- **Segment breakdowns.** Vendor A may win short queries, B long ones; one wins legal-domain traffic, another wins code. Report per-segment winners, not just the global average — that's where real switching decisions live.
+- **Cost projected to real money.** Extrapolate per-call cost to "your monthly spend at current volume" per vendor. `-40% cost` in dollars is the line that moves a buyer, not fractions of a cent per call.
+- **Actionable recommendation with honest caveats.** "Switch to X: +12% quality, −40% cost, +50ms latency." State the trade-off plainly; never hide the downside.
+- **Committable, reproducible artifact.** Report is markdown + JSON with a footer of config hash, model/rubric/vendor versions, and timestamp. Auditable, diffable, citable.
+- **Diff / regression mode.** Compare against a previous run to show drift ("Vendor A's quality dropped 8% since last month") — the on-ramp from one-shot bake-off to continuous monitoring.
+
+### 11.5 Package as OSS CLI first
+
+`ingest → sweep → report`, runs locally so sensitive traffic never leaves customer infra. Specifics:
+
+- **Local-first / privacy is the core promise.** Runs entirely on customer infra, bring-your-own API keys, nothing phones home. Fits the transparency thesis and unblocks sensitive traffic (legal/PII). Any telemetry is strictly opt-in.
+- **Config-as-files, git-native.** Dataset, rubric, and vendor/candidate lists are all YAML; the report is a committable artifact. Everything lives in the customer's repo and diffs cleanly.
+- **Clear command surface.** `init` (scaffold) → `ingest` (load prod traffic or synthesize) → `label` (bootstrap gold set) → `sweep`/`replay` (fan across candidates) → `report` (ranked recommendation). Each stage cached and resumable.
+- **CI-friendly by design.** Meaningful exit codes and thresholds so a bake-off can run in a pipeline and *fail the build* when a vendor regresses — the mechanism that turns one-shot into continuous eval.
+- **Vendor adapters as plugins.** Adding a provider = writing one thin adapter to the canonical schema. Ship web-search adapters first (Exa, Linkup, Tavily, Brave, Perplexity); models next.
+- **Disciplined secrets handling.** Keys via env/`.env`, never logged, never written to the cache. Cache stores results keyed by hash, not credentials.
+- **Minimal deps, easy install.** `pip install`, works offline except for the actual vendor calls. Low activation energy = adoption.
+- **Explicit open-core boundary.** Decide up front what's OSS (engine, judge framework, adapters, report) vs. paid/hosted later (managed replay, dashboards, continuous drift monitoring, private per-customer benchmarks). License: permissive (MIT/Apache-2.0) to maximize trust and distribution.
+- **Day-one usable.** Ship starter rubric packs + example datasets + a quickstart so someone can run a real web-search bake-off in minutes. Pair with an early landing page (waitlist + thesis) and 2–3 design partners running a slice of production traffic.
