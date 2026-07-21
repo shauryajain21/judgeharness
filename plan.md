@@ -137,3 +137,49 @@ The end state isn't "vendor comparison tool" — it's *the trust layer for AI de
 - **Meta-eval (the credibility layer)** — let the customer label ~20 pairs, then show judge-vs-human agreement/consistency/bias right in the report. Ship this as core, not a nice-to-have — it's the transparency thesis made real.
 - **Report + recommendation** — ranked per-vendor results on quality/latency/cost, every score expandable to the judge's reasoning; output "the right vendor for you."
 - **Package as OSS CLI first** — `ingest → sweep → report`, runs locally so sensitive traffic never leaves customer infra; landing page + 2–3 design partners (start with web-search-API bake-offs).
+
+### 11.1 Ingest + replay harness for production or synthetic traffic
+
+Keep it thin, but these are the non-negotiables:
+
+- **One canonical schema + per-vendor adapters.** Normalize every vendor's API into a common request/response shape so you fan out *one* input and compare like-for-like. Adapters are the only vendor-specific code; everything downstream stays vendor-agnostic.
+- **Faithful, apples-to-apples replay.** Hold everything constant except the vendor: same query, same result count / `top_k`, same effective params. Log every knob you set — most "vendor X is better" claims die on unequal configs.
+- **Capture the full triple per call: output + latency + cost.** Store the raw response verbatim (so the judge can re-score later without re-querying), and measure latency honestly (total vs. time-to-first-byte, excluding *your* harness overhead).
+- **Cost must be computed, not guessed.** Each vendor prices differently (per-request, per-1k-tokens, per-result); keep a pricing table that's versioned and dated, since it drifts. Record cost per call so the report is defensible.
+- **Data sensitivity is a first-class constraint.** Production traffic can be legal/PII (Harvey!). Design for local/self-hosted runs, optional redaction, and explicit consent before any input leaves the customer's infra to a third-party vendor. "Your traffic never leaves your box" is a feature, not an afterthought.
+- **Spend + rate-limit guardrails.** Replaying real traffic costs money and hits vendor rate caps. Build in concurrency limits, per-run budget caps, sampling (test a *slice*, not all traffic), and backoff — so a bake-off can't silently rack up a huge bill.
+- **Cache by `(input, vendor, config)` hash.** Never re-pay for a call you've already made; makes reruns free and results reproducible. Same reproducibility principle as the judge side.
+- **Robust failure handling as data, not noise.** Timeouts, retries, partial failures — normalize vendor errors and *record error/timeout rate as its own metric*. A vendor that's 5% faster but fails 3% of the time should show that in the report.
+- **Interleave, don't batch by vendor.** Run candidates round-robin per query rather than "all of vendor A, then all of B," so time-of-day, network, and vendor-load effects hit everyone equally instead of biasing one.
+- **Pin and timestamp everything.** Vendor API version, model version, region, and run time — stored with each result. Vendors change under you; without provenance you can't trust or reproduce a past bake-off.
+
+### 11.2 The judge core
+
+The design moves that make it "traceable" rather than just another LLM-as-judge wrapper:
+
+- **Rubric as a typed YAML contract.** Criteria + weights + a customer-authored `guide` per criterion (their definition of "quality") + a scoring scale. This is the whole tuning surface — natural language where it's subjective, structured where it's mechanical. Validate with a schema so a malformed rubric fails loudly, not silently.
+- **Force structured, per-criterion output.** The judge never returns a bare 1–10. It returns `{criterion → score, reasoning, evidence}` via a forced JSON schema (pydantic), and you *refuse the verdict if it doesn't validate*. This is the "no silent garbage" default and what makes verdicts inspectable.
+- **Evidence-grounded reasoning.** Require the judge to *quote the specific span* of the output it's scoring against. Anchored evidence kills hand-wavy rationalization and gives the customer something concrete to audit.
+- **Aggregate in code, not in the model.** The LLM scores each criterion; the weighted roll-up to a final verdict happens deterministically in code. This guarantees the verdict is *provably a function of the criterion scores* — the "faithfulness gate" made structural, killing the "nice rationale, unrelated verdict" failure.
+- **Blind the judge to vendor identity.** For vendor selection this is critical: anonymize outputs to `A`/`B`/`C` so the judge can't brand-bias toward a name or the incumbent. Neutrality *is* the business — a judge caught favoring a name is worthless.
+- **Bias defaults baked in.** `temperature=0`, auto order-swap with `flip_rate` reporting for pairwise, cross-generator scoring for self-preference (all from `knowledge-base/02-trust-metrics.md`). On by default, not opt-in.
+- **Meta-eval is part of the judge, not a separate tool.** The judge validates itself against ~20 customer-labeled gold pairs and surfaces agreement / consistency / bias *in the report*. Given the transparency thesis, "here's how much this judge agrees with you" is a core feature — it's what lets a customer trust the recommendation.
+- **Two-stage tuning, then freeze.** Customer iterates: edit rubric → run on gold set → check agreement → repeat. Once agreement is high, **freeze the judge config** (versioned). Frozen = reproducible = citable. No mid-verdict nudging.
+- **Domain rubric packs, shared harness.** The judging machinery is generic; criteria differ per category (web-search relevance ≠ code quality ≠ RAG faithfulness). Ship starter packs, let customers fork them — "harness generalizes, rubrics don't," and it doubles as the OSS contribution surface.
+- **Everything is a stored, replayable trace.** Persist each verdict's full trace (inputs, criterion scores, reasoning, evidence, model + rubric version). Re-audit or re-aggregate later without re-calling the model — mirrors the replay harness's caching.
+
+Through-line: the judge is trustworthy because the verdict is a *deterministic function of inspectable, evidence-backed, criterion-level scores from a blinded, frozen, meta-eval-validated judge* — not because the model "seems smart."
+
+### 11.3 Human reinforcement
+
+Targeted human reinforcement — and precisely: it reinforces the **rubric + judge config**, not the model weights (we don't own the models).
+
+- **Gold labels are the anchor.** The primary human input is the ~20–50 labeled examples (the calibration set). The human defines "good"; the judge learns to reproduce it.
+- **Bootstrap keeps it cheap.** A stronger model drafts labels; the human confirms/corrects. Low effort, high leverage — if labeling is painful, people skip it and fall back to vibes.
+- **Disagreement is the reinforcement signal.** Every judge-vs-human disagreement is the highest-value data point. Loop: disagree → human reviews → either fix the rubric/criteria or add that case as a new calibration example. The judge aligns more each iteration.
+- **Active learning, not random labeling.** Surface the cases that matter — low-confidence verdicts, high-variance (flaky) items, and A/B pairs that flipped on order-swap — instead of asking the human to label everything.
+- **Config-level RL, not weight-level.** We reinforce the rubric, weights, and calibration set — a frozen, versioned artifact — not model parameters. Reproducible and portable across providers. True RLHF/finetuning is a later, optional lever.
+- **The customer is the human, not us.** Reinforces neutrality: subjective "quality" is owned by the customer's labels, so the recommendation reflects *their* standard.
+- **Continuous reinforcement guards against drift.** Because production traffic changes over time, periodically sample fresh cases for human review to catch the judge silently drifting on new distributions.
+
+Net: the human is in the **calibration and disagreement-review loop**, not in every verdict. The judge freezes once agreement is high enough; re-engage the human only when meta-eval agreement drops.
