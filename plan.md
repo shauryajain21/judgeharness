@@ -211,3 +211,527 @@ Ranked per-vendor results on quality/latency/cost, every score expandable to the
 - **Minimal deps, easy install.** `pip install`, works offline except for the actual vendor calls. Low activation energy = adoption.
 - **Explicit open-core boundary.** Decide up front what's OSS (engine, judge framework, adapters, report) vs. paid/hosted later (managed replay, dashboards, continuous drift monitoring, private per-customer benchmarks). License: permissive (MIT/Apache-2.0) to maximize trust and distribution.
 - **Day-one usable.** Ship starter rubric packs + example datasets + a quickstart so someone can run a real web-search bake-off in minutes. Pair with an early landing page (waitlist + thesis) and 2–3 design partners running a slice of production traffic.
+
+---
+
+# Part II — Research & the MVP
+
+*Appended July 21, 2026, after a portfolio scan of all 6,063 YC companies (through
+S26) and a literature review. Part I above is the thesis; Part II is what survived
+contact with evidence, and the MVP we actually build.*
+
+## 12. Research: what the market and the literature say
+
+### 12.1 Method
+
+- **YC scan.** Pulled the full YC company dataset (6,063 companies, Winter 2005 →
+  Summer 2026) and pattern-matched across eight axes: evals/observability,
+  judges/verifiers/reward models, routing/gateways, benchmarking, vendor selection
+  and procurement, search APIs for agents, replay/simulation, and independent
+  audit/assurance. Read the long descriptions of every near-neighbour by hand.
+- **Literature.** ~20 papers across four clusters: statistical rigour in LLM evals,
+  LLM-judge bias, retrieval/relevance judging, and routing.
+- **Competitive.** The vendors themselves — including reading the benchmark code
+  Exa and Tavily each publish.
+
+### 12.2 Finding #1: the horizontal eval platform is a graveyard. Do not build one.
+
+Of the YC cohort that shipped "LLM eval / observability platform":
+
+| Company | Batch | Status |
+|---|---|---|
+| Humanloop | S20 | **Acquired** |
+| Langfuse | W23 | **Acquired** |
+| Helicone | W23 | **Acquired** |
+| Chatter | S23 | **Acquired** |
+| DAGWorks | W23 | **Acquired** |
+| FlowiseAI | S23 | **Acquired** |
+| Atla | S23 | **Inactive** |
+| Magicflow | W23 | **Inactive** |
+| Airtrain AI | S22 | **Inactive** |
+| Vango AI | S23 | **Inactive** |
+| BricksAI | S22 | **Inactive** |
+
+Eleven companies, zero independent survivors at scale. The ones still standing
+went enterprise (Confident AI, W25) or fused evals into a gateway (Respan, W24 —
+"observability, evals, *and* gateway"). Outside YC the category consolidated
+upward: **Braintrust raised an $80M Series B at ~$800M in Feb 2026.**
+
+Atla is the sharpest cautionary tale, and it echoes `knowledge-base/08`: they built
+judge *models* (Selene, 60k+ downloads) and are now inactive. **Being good at
+judging is not a business. Being the reason someone changes a vendor is.**
+
+→ **Implication: never say "eval platform."** The category is priced, crowded, and
+consolidating. We sell a *decision*, and evals are how we produce it.
+
+### 12.3 Finding #2: the closest neighbours all skip the proof step
+
+| Company | Batch | What they do | What they don't do |
+|---|---|---|---|
+| **Understudy Labs** | S26 | OSS toolkit: capture traces → evaluate cheaper models → A/B every switch → fine-tune → ship "specialist routes you own" | Destination is predetermined (open weights + your own fine-tune). Not neutral, not multi-vendor, models only. |
+| **Conifer** | S26 | Local-first least-cost routing, "~80% cheaper," one invoice | Routes at runtime on a cost heuristic. Never proves quality held. |
+| **The Hog** | F25 | One API over Exa/Tavily/Apollo/Clay with "multi-provider waterfall logic" | Aggregates and routes. The customer never sees which source was better or why. |
+| **LLM Stats** | S25 | Independent, contamination-proof public benchmarks | Public data, not your traffic. |
+| **Respan** | W24 | Observability + evals + adaptive gateway, 1B+ logs/mo | Optimizes within your stack; doesn't run vendor bake-offs. |
+| **Armature** | Sp26 | Measures your product's "agent experience" *against competitors* | Sells to the **vendor**, not the buyer — the mirror image of us. |
+| **Confident AI** | W25 | DeepEval + enterprise eval/observe/red-team/govern | Grades outputs; assumes you already picked the vendor. |
+
+Understudy Labs is the closest and the most instructive. YC funded, in the most
+recent batch, the shape "capture prod traces → benchmark alternatives → only switch
+when the held-out eval is beaten." **That validates the motion and tells us where
+to differentiate:** they answer *"how do I get off the expensive model?"* We answer
+*"which of these N vendors is actually right for me, and can you prove it?"* —
+neutral, multi-category (search → rerankers → models → tools → data), and
+statistically defensible rather than a pass/fail gate.
+
+→ **Implication:** every neighbour either *routes without proving* or *migrates
+toward a predetermined destination*. Nobody sells the **proof**. That's the wedge.
+
+### 12.4 Finding #3: the sharpest pitch in the portfolio is not an AI company
+
+**Floracene (S26)** — "shows independent surgery centers the best-priced equivalent
+implant for every procedure." Their own words:
+
+> "90%+ of expensive implants they use are clinically interchangeable, but the
+> choice comes down to habit, brand comfort, or the device rep... Roughly ~20–30%
+> of that spend is recoverable by switching to a clinically-equivalent device."
+
+That is our thesis, in another market, funded by YC in the latest batch. The shape
+— *substitution-with-proof against a habit-driven incumbent* — is repeatedly
+fundable: Vendr (S19, acquired) for SaaS contracts, Dexter (F24) for supplier
+consolidation, Alara (S25) / DGI (W24) / Reframe (W26) for cross-vendor comparison.
+
+**Our version:** AI vendors are largely interchangeable at the interface, the choice
+comes down to habit and whoever you integrated first, 20–40% of spend *and* a real
+slice of quality is recoverable — **but unlike implants, nobody can even establish
+equivalence, because there is no accepted way to measure it on your own traffic.**
+That missing measurement is the product.
+
+### 12.5 Finding #4 (the money slide): every vendor wins its own benchmark
+
+Search vendors publish open-source benchmark harnesses. We read them.
+
+| Source | Claim |
+|---|---|
+| **Tavily's own repo** (`tavily-ai/tavily-search-evals`; supports Tavily, Exa, Brave, Serper, Perplexity, GPTR) | Tavily wins SimpleQA at **93.3%**; **"Exa Search consistently ranks lowest on both metrics."** |
+| **Exa's own repo** (`exa-labs/benchmarks`; ~840 WebCode + 1,400 people + ~800 company queries) | **"Exa dominates across nearly all measured categories"** — 82.8% vs Parallel 74.2%; 72.0% R@1 vs Brave 44.4%; 79% vs 65–66% RAG accuracy. |
+| **Linkup** (blog) | Linkup best: **92% F-score on Verified SimpleQA**, "highest of any sub-second web search API." |
+| **Parallel** | Parallel **47% on HLE** vs Exa 24%, Perplexity 30%, Tavily 21%. |
+| **Exa vs Tavily page** | Exa 81% vs 71% on complex retrieval; p95 latency **1.4–1.7s vs 3.8–4.5s**. |
+
+**Exa is simultaneously "consistently lowest" and "dominates nearly all
+categories," depending on whose repo you run.** Both harnesses are open source.
+Both are reproducible. Both are honest. They just encode different definitions of
+"good" on different query distributions.
+
+This is not a gotcha — **it's the whole argument.** There is no neutral answer
+because "best" is distribution-dependent and rubric-dependent. The only defensible
+answer is the one computed on *your* queries with *your* definition of good. That
+sentence is the company.
+
+> **The line:** *Every search vendor ships an open-source benchmark. Every one of
+> them wins it. None of them ran on your traffic.*
+
+### 12.6 Finding #5: the vendor layer is consolidating — a recurring "why now"
+
+**Nebius acquired Tavily for $275M on Feb 10, 2026** (up to ~$400M with earnouts);
+Tavily now sits inside an AI cloud. Every acquisition, price change, model
+deprecation, and index refresh is a reason your 2023 vendor choice is stale — and a
+trigger event for a bake-off. Adjacent: enterprise LLM API spend passed **$8.4B in
+2025 and is on track to double**, while per-token prices fell ~280× since 2022 —
+i.e. **usage, not price, drives the bill**, so *which* vendor you use compounds.
+
+### 12.7 Findings from the literature (these changed the design)
+
+**(a) The impossibility result — meta-eval is mathematically required, not a nice-to-have.**
+*Best Arm Identification with LLM Judges and Limited Human Audits* (arXiv 2601.21471)
+proves that **selecting the best arm by judge alone is impossible under differential
+bias**: if the judge is biased differently across candidates, *collecting more judge
+observations reinforces confidence in the wrong decision.* Empirically, judge-only
+selection scored **0% accuracy** in their setup. Full human audit cost 10,500 units.
+Their hybrid: **70–90% cheaper than human-only** with δ-correctness guarantees.
+
+> This upgrades §11.3 from "credibility feature" to **load-bearing mathematics**.
+> A vendor bake-off without human audits isn't conservative — it's *invalid*. It
+> also reframes the meta-eval from a trust-marketing gesture into the thing that
+> makes the recommendation mean anything, which is the most defensible technical
+> position available to us.
+
+Their algorithm is our spine:
+- Estimate each arm as `θ̂ = judge_mean + IPW-corrected residual`, where the
+  residual `(human − judge)` is only computed on audited items and reweighted by
+  `1/π` to undo selective auditing.
+- **Neyman audit allocation:** audit probability `π ∝ √Var(human − judge)` — audit
+  where the judge is *unpredictable*, not uniformly. **48% cheaper than uniform
+  10% auditing** at identical accuracy.
+- **Anytime-valid confidence sequences** (sub-Gaussian for the judge mean, empirical
+  Bernstein for the residual, δ/K per arm) so you can peek continuously and stop
+  adaptively. Stop when the leader's lower bound clears every challenger's upper
+  bound. Coverage measured at 98.8% against a 95% target.
+
+**(b) Paired analysis is free statistical power — and our design is already paired.**
+Miller, *Adding Error Bars to Evals* (arXiv 2411.00640, Anthropic): report SEM and
+95% CI; use **clustered standard errors** when questions come in groups; and run
+**question-level paired-difference tests** when comparing two systems, which
+eliminates question-difficulty variance. Replay sends *the same query to every
+vendor* — it is paired by construction. Most vendor "benchmarks" throw this away by
+comparing population means.
+
+**(c) Position bias is worst exactly where we operate.**
+*Judging the Judges* (arXiv 2406.07791): position consistency ranges ~0.57–0.82
+across judges; the dominant driver is the **answer-quality gap** — judges are
+consistent when candidates differ a lot and **flip when candidates are similar**.
+Question/response/prompt length barely matter. Broader surveys put position bias at
+**10–15 points of win-rate swing** and verbosity bias at **15–30 points**.
+
+> Competing vendors are *by definition* close in quality. So our use case sits in
+> the worst region of the bias curve. Design consequence: **an order-swap flip is
+> not noise to average away — it is the finding.** Flips get reported as
+> "too close to call," never silently resolved.
+
+**(d) Listwise ranking is the worst way to compare 5 vendors.**
+Position bias is present in pointwise, pairwise, *and* listwise, but **listwise
+suffers most and pairwise least.** Pairwise over all candidates is O(n²).
+→ **Resolution: pairwise against the incumbent as the control arm.** O(n),
+minimum-bias comparison mode, and it exactly matches the business question
+("should I switch *from what I have*?").
+
+**(e) Checklists beat scalar scores, and make small judges viable.**
+*RocketEval* (ICLR 2025, arXiv 2503.05142): reframe judging as answering an
+**instance-specific checklist**, grade items with a lightweight model, then
+**reweight checklist items via supervised fitting to human annotations**.
+Gemma-2-2B reached **0.965 correlation with human preferences — comparable to
+GPT-4o — at >50× lower cost**, explicitly because checklists cut uncertainty and
+positional bias. *Replacing Judges with Juries* (arXiv 2404.18796, Cohere): a panel
+of three small models from **disjoint families** beats one large judge, with less
+intra-model bias, at **>7× lower cost**.
+→ Checklist grading + a small-model panel is both cheaper *and* less biased. And
+item reweighting is exactly the "human reinforcement" loop of §11.3, done properly.
+
+**(f) Criteria drift — the rubric cannot be configured up front.**
+Shankar et al., *Who Validates the Validators?* (UIST 2024, arXiv 2404.12272):
+**"users need criteria to grade outputs, but grading outputs helps users define
+criteria."** Criteria are often dependent on the specific outputs observed.
+→ Kills plan.md §3 step 3 ("configure the judge") as a *first* step. The rubric UI
+must be **grade-then-refine**: show real outputs, let the user react, mine criteria
+from their reactions. Configure-first is a research-documented failure mode.
+
+**(g) There is a credible, citable default rubric for search.**
+UMBRELA (arXiv 2406.06519) reproduces Bing's LLM relevance assessor on a 0–3 graded
+scale, correlates highly with human labels and system rankings across TREC DL
+2019–2023, and was **adopted by TREC 2024 RAG for automated evaluation.** Known
+failure mode: LLM judges **over-rate relevance** relative to humans, with false
+positives correlating with query-term presence.
+→ Ship UMBRELA-style graded relevance as the v1 default rubric (nDCG@k / MRR /
+recall@k computed on top), and note that its known over-rating bias is precisely
+what the human audit correction in (a) removes.
+
+**(h) PPI: 20 human labels can become an estimator, not a vibe check.**
+Prediction-Powered Inference and StratPPI (arXiv 2406.04291, Fisch et al.) combine a
+small human-labeled set with a large auto-labeled set to get **unbiased estimates
+with tighter intervals than human-only**; stratification tightens further when
+autorater accuracy varies across the distribution. *How to Correctly Report
+LLM-as-a-Judge Evaluations* (arXiv 2511.21140) adds plug-in correction for imperfect
+judge sensitivity/specificity, CIs accounting for both test *and* calibration
+uncertainty, adaptive calibration allocation, and — importantly — **unbiasedness
+under distribution shift between calibration and test sets**, which naive approaches
+lack. (Relevant: your gold set will *always* drift from live traffic.)
+
+**(i) What we're replacing costs weeks.** Current best practice for a provider swap
+is **shadow-test for 1–4 weeks at ~2× inference cost, ~10,000 production cases,
+then canary** — a 3–6 week window, hand-rolled per team.
+
+**(j) Ingest is a solved standard — don't build SDKs.** OpenTelemetry **GenAI
+semantic conventions** (CNCF GenAI SIG, v1.37+) standardize `gen_ai.*` spans:
+`gen_ai.request.model`, `gen_ai.usage.input_tokens`/`output_tokens`,
+`gen_ai.provider.name`, `gen_ai.input.messages`/`output.messages`, operation names
+`chat` / `embeddings` / `execute_tool` / `invoke_agent`, span naming
+`{operation} {name}` (e.g. `execute_tool web_search`). Adopted by Datadog, AWS,
+Azure, GCP.
+→ **v1 ingest = read OTel GenAI spans.** One adapter, industry-standard, and most
+target customers already emit it. Building a proprietary SDK would be the single
+biggest waste of MVP time.
+
+---
+
+## 13. The MVP
+
+### 13.1 Scope decision: web-search APIs first — and the reason isn't familiarity
+
+The deciding criterion is **reversibility**: pick the category where acting on the
+recommendation is a one-line change, so value is realized in days, not quarters.
+
+| | Web search APIs | Models |
+|---|---|---|
+| Candidate set | 5–7, well-defined | 50+, fuzzy |
+| Cost to replay 1k queries × 5 | **~$30** | $50–500+ |
+| Output length to judge | Short (10 results) | Long-form, expensive |
+| Cost of acting on the answer | **One API call swap** | Prompt migration, regression risk |
+| Vendor claims | **Provably contradictory (§12.5)** | Partially settled by public leaderboards |
+| Competitive density in YC | ~zero | Understudy, Conifer, routers, every eval platform |
+| Buyer urgency trigger | Tavily→Nebius, index churn, price changes | Model deprecations |
+
+→ **v1 = web-search API bake-offs.** Expansion order, by rising switching cost:
+**search → rerankers/embeddings → models → MCP tools & data providers → infra.**
+(Rerankers second is deliberate: same shape as search, same rubric machinery, and
+ZeroEntropy-class vendors make it a live decision.)
+
+### 13.2 The product in one sentence
+
+> **Point it at your traffic, pick your candidates, and it returns a switching
+> decision with a confidence interval — or tells you the difference isn't real.**
+
+The second half matters as much as the first. A tool willing to say *"these two
+vendors are indistinguishable on your traffic; keep the cheaper one"* is a tool you
+can trust when it says switch. **Our defensible negative is the credibility asset.**
+
+### 13.3 The core protocol (this is the actual invention)
+
+**Challenger-vs-incumbent, paired, order-swapped, audit-debiased.**
+
+1. **Ingest.** Read OTel GenAI spans (`execute_tool web_search`), or a CSV/JSONL of
+   queries, or synthesize from a use-case description. Sample a slice, don't take
+   everything.
+2. **Stratify.** Bucket queries by observable features (length, intent class,
+   domain, has-entity). Stratification tightens intervals (StratPPI) *and* produces
+   the per-segment winners that drive real decisions.
+3. **Replay, interleaved.** Round-robin per query across incumbent + challengers —
+   never "all of A, then all of B" — so time-of-day and vendor-load effects hit
+   everyone equally. Cache by `(query, vendor, config)` hash. Record output verbatim,
+   TTFB, total latency, computed cost, and error/timeout as a first-class metric.
+4. **Judge, pairwise vs. the incumbent, both orders.** Instance-specific checklist
+   (RocketEval), graded by a **panel of 3 small models from disjoint families**
+   (PoLL), each item requiring a **quoted evidence span**. Roll up to a verdict
+   **deterministically in code**, never in the model.
+   - Order-swap flip → labeled **`TOO_CLOSE`**, surfaced, never averaged away.
+   - `flip_rate` is a headline number, not a footnote.
+5. **Audit, variance-guided.** Choose which items a human labels by Neyman
+   allocation `π ∝ √Var(human − judge)`, targeting ~10% audit rate, floor `π_min`.
+   Bootstrap each label with a stronger model drafting and the human confirming.
+6. **Estimate.** `θ̂_vendor = judge_mean + IPW(human − judge)` per stratum, with
+   anytime-valid confidence sequences and δ/K allocation across K candidates.
+   Question-level **paired differences** vs. the incumbent (Miller).
+7. **Stop.** When the leader's lower bound clears all challengers' upper bounds →
+   declare a winner. When budget is exhausted first → **declare no significant
+   difference and say so.** Both are valid, reportable outcomes.
+
+**Why this is hard to copy:** any competitor can fan out API calls. The moat is
+(1) the audit-debiasing estimator that makes the verdict *valid* rather than
+*plausible*, (2) the frozen, versioned, reproducible rubric artifact, and (3) the
+neutrality that comes from selling to the buyer, never the vendor.
+
+### 13.4 What v1 deliberately does NOT include
+
+Cut ruthlessly. Everything below is post-MVP:
+
+- ❌ Runtime routing / gateway (that's Conifer, Respan, OpenRouter — and it makes us
+  a dependency instead of an auditor)
+- ❌ Hosted dashboard, accounts, multi-tenancy
+- ❌ Fine-tuning or model training (that's Understudy/Cascade)
+- ❌ Continuous monitoring — v1 ships `diff` against a previous run and stops there
+- ❌ Mechanistic interpretability / J-lens tier (`knowledge-base/03–05`) — v2 moat,
+  not v1 scope
+- ❌ Categories beyond web search
+- ❌ Anything that requires the customer's data to leave their machine
+
+### 13.5 Shape, commands, stack
+
+Local-first OSS CLI. Config in, committable report out. No server, no DB.
+
+```bash
+bakeoff init                      # scaffold: candidates.yaml, rubric.yaml, .env
+bakeoff ingest --otel ./traces/   # or --csv queries.csv, or --synthesize "legal research agent"
+bakeoff run --incumbent exa --challengers tavily,brave,linkup,parallel \
+            --budget 50usd --audit-rate 0.10 --confidence 0.95
+bakeoff label                     # only the items Neyman allocation asked for
+bakeoff report                    # report.md + report.json + config hash
+bakeoff diff ./runs/2026-06 ./runs/2026-07   # drift
+```
+
+- **Stack:** Python · `pydantic` (forced schemas, refuse-on-invalid) · `litellm`
+  (LiteLLM is YC W23 — the adapter layer, don't rebuild it) · SQLite cache ·
+  `presidio` optional redaction pass before anything leaves the box.
+- **Reuse from `knowledge-base/`:** the trust-metric definitions (`02`), the
+  freeze-and-version discipline (`01`), the pipeline shape (`06`). The engine is
+  the same harness pointed at vendors instead of judges.
+- **Privacy is the sales argument, not a checkbox.** Runs entirely local, BYO keys,
+  nothing phones home, opt-in telemetry only, `--redact` before any third-party
+  call. Harvey-class customers cannot use a hosted alternative at all.
+
+### 13.6 Rubric UX: grade-then-refine (per §12.7f)
+
+Wrong: "configure your judge, then run." Right:
+
+1. Run a 20-query pilot with the UMBRELA-style default rubric.
+2. Show the user **real side-by-side outputs** and ask for their verdict on ~20.
+3. **Mine criteria from their disagreements with the default**, propose rubric edits
+   in their language, show the agreement (Cohen's κ) move.
+4. Iterate until κ clears threshold → **freeze and version the rubric.** Frozen =
+   reproducible = citable. No mid-verdict nudging (`knowledge-base/01`).
+
+### 13.7 The report
+
+Every principle in §11.4 stands. The research adds four requirements:
+
+- **Paired differences with CIs**, not two population means side by side.
+- **`TOO_CLOSE` is a first-class verdict**, with `flip_rate` shown next to every
+  headline number.
+- **A judge-trust panel** at the top: agreement (Cohen's κ), audit count, audit
+  rate, coverage, `flip_rate`, panel disagreement. *The reader must know how much
+  to trust the recommendation before reading it.*
+- **Per-stratum winners** — the global average is usually the least actionable number
+  in the report.
+
+Headline format:
+
+```
+Switch to Linkup for entity queries (61% of your traffic):
+  quality  +7.2 pts  [95% CI: +3.1, +11.3]  (paired, n=612, 58 audited)
+  cost     -34%      ($1,240/mo → $818/mo at your current volume)
+  latency  +180ms p95
+  flip_rate 0.04 · κ vs your labels 0.81 · 3-model panel, 2 dissents
+
+Short factual queries (39%): no significant difference. Keep Exa.
+```
+
+### 13.8 Cost model — the number that sells the demo
+
+Per bake-off, 1,000 queries × 5 vendors:
+
+| Line | Cost |
+|---|---|
+| 5,000 searches @ ~$5–9/1k (Exa $7, Brave $5–9, Linkup €5, Tavily $5–8, Perplexity $5) | **~$30** |
+| ~8,000 checklist judgments, small-model panel (RocketEval: >50× cheaper) | **~$5–15** |
+| Human audit: ~10% of decisions, bootstrap-drafted | **~1 hour** |
+| **Total** | **< $50 and under an hour** |
+
+Against the status quo — **1–4 weeks of shadow traffic at ~2× inference cost across
+~10,000 cases, then canary, a 3–6 week window.**
+
+> **The demo claim: a defensible vendor switching decision for under $50 and one
+> hour of human attention, instead of a month of shadow traffic.**
+
+### 13.9 Build plan
+
+| Week | Ship | Done when |
+|---|---|---|
+| **1** | Canonical schema, 5 search adapters (Exa, Tavily, Brave, Linkup, Parallel), interleaved replay, hash cache, versioned pricing table, latency/error capture | `bakeoff run` produces a clean result matrix on 100 queries |
+| **2** | Checklist judge: forced pydantic schema, evidence spans, 3-model disjoint panel, code-side aggregation, mandatory order swap + `flip_rate`, `TOO_CLOSE` | Judge never emits an unvalidated verdict; flips are visible |
+| **3** | **The statistics layer** — paired differences, stratification, Neyman audit allocation, IPW residual correction, anytime-valid confidence sequences, stopping rule | Simulation harness confirms coverage ≥ nominal; correct answer at ~10% audit rate |
+| **4** | `label` (bootstrap-drafted), `report` (md+JSON, drill-down to evidence, monthly-$ projection), `diff`, UMBRELA-style starter rubric pack, quickstart | A stranger runs a real 5-vendor bake-off from a cold `pip install` |
+| **5–6** | Design partners + the public leaderboard (§13.10) | 3 partners have run their own traffic; leaderboard live and reproducible |
+
+Week 3 is the week that matters. Weeks 1–2 are plumbing anyone can write; week 3 is
+the company. If schedule slips, cut week 4 features, never week 3.
+
+### 13.10 Distribution: the neutral leaderboard
+
+Same engine, second surface — mirrors the three-layer structure in
+`knowledge-base/09`.
+
+Publish a **continuously-updated, fully reproducible, neutral leaderboard for
+search APIs**, generated by the OSS harness, with the rubric, query set, run
+config, and raw outputs public. Explicitly positioned against §12.5:
+
+> *Four vendors publish four benchmarks and each one wins. Here's one that nobody
+> being measured paid for — and here's the command to reproduce it yourself.*
+
+Why it compounds: it's the credibility proof (transparency thesis rendered as a
+public artifact), the top-of-funnel ("this is great, but run it on *my* queries" →
+`pip install`), the PR engine on every vendor launch and acquisition, and the
+design-partner bait. **Neutrality is enforced structurally: we never take money
+from a vendor being ranked.** That single rule is the asset — and it is why we
+cannot become Armature, which sells the same measurement to the vendor.
+
+### 13.11 Design partners
+
+Target teams where search quality is visibly load-bearing and traffic is
+sensitive enough that local-first is a requirement, not a preference: AI legal and
+finance research (Harvey-class), deep-research agents, GTM/enrichment agents,
+support agents with retrieval. YC's own portfolio is the warm list — every company
+that names Exa/Tavily/Serper in its stack is a prospect, and the RL/eval cohort
+(hud, Osmosis, Halluminate, Polymath, Ressl) are peers who understand the argument
+immediately.
+
+**The ask is small on purpose:** "give us 500 of your search queries, redacted,
+and one hour of one engineer's labeling. You get a report you can act on today."
+
+### 13.12 Traction target for the application
+
+One sentence, and it should be a *finding*, not a feature list:
+
+> **"We ran neutral bake-offs on 5 companies' real production traffic. In 4 of 5,
+> the vendor they'd been paying for since 2023 was not the best one for their
+> traffic — and in 2 of those, that vendor's own published benchmark had claimed
+> it was."**
+
+That last clause is the whole company in eleven words.
+
+### 13.13 Risks and kill criteria
+
+| Risk | Mitigation | Kill criterion |
+|---|---|---|
+| **Vendors are genuinely indistinguishable** on real traffic — nothing to sell | Cost/latency deltas are large and real even at quality parity; "keep the cheaper one, here's proof" is still a decision worth paying for | If <2 of 5 design partners have *any* significant difference on any stratum, the wedge is wrong — move to rerankers or models |
+| **One-shot purchase** — you buy once, then never again | Trigger events are frequent (acquisitions, price changes, index refreshes, new entrants); `diff` mode + CI thresholds convert one-shot into continuous | If no partner re-runs within 60 days, the continuous story is fiction |
+| **Judge disagrees with the buyer** and they don't trust the result | κ is reported before the recommendation; grade-then-refine raises it; audit correction makes the estimate valid even with a mediocre judge | If κ can't clear ~0.6 after rubric iteration on 3 of 5 partners |
+| **Buyer won't send traffic to competitors** (legal/PII) | Local-first, BYO keys, Presidio redaction, explicit per-vendor consent gate | — |
+| **Incumbent eval platforms bolt this on** (Braintrust at $800M has the traces) | They grade outputs and assume the grader is fine; the audit-debiasing estimator + structural neutrality is not a feature they can bolt on while selling to everyone | — |
+| **A gateway commoditizes it** (Respan, Conifer, OpenRouter) | Their incentive is to route, not to tell you to leave. Structurally they cannot be neutral about vendors they resell | — |
+| **We're too niche** (search APIs is a small market) | Search is the wedge, not the market: the harness is category-agnostic and rerankers/models/tools follow | If expansion to rerankers takes >1 month of new engine work, the harness isn't as generic as claimed |
+
+### 13.14 Application drafts
+
+| Field | Answer |
+|---|---|
+| **What we make** | We replay your production traffic across candidate AI vendors and give you a switching decision with a confidence interval — or tell you the difference isn't real. OSS CLI, runs on your infra. |
+| **One-liner (≤50 chars)** | *Prove which AI vendor is best on your traffic.* |
+| **The problem** | Every AI vendor publishes a benchmark it wins. Exa's repo says Exa dominates; Tavily's repo says Exa ranks last. Both are open source. Neither ran on your queries. |
+| **Why now** | The vendor layer is consolidating (Nebius bought Tavily for $275M in Feb 2026), enterprise LLM API spend passed $8.4B and is doubling, and the standard alternative — 1–4 weeks of shadow traffic at 2× cost — is something almost nobody actually does. |
+| **What's new / technically hard** | A judge alone provably *cannot* pick the best vendor: under differential bias, more judge samples increase confidence in the wrong answer (arXiv 2601.21471). We combine a cheap checklist judge with variance-guided human audits and an IPW-debiased, anytime-valid estimator — a statistically valid decision at ~10% audit cost, ~70–90% cheaper than human-only. |
+| **Competitors** | Braintrust/Confident AI grade outputs *after* you picked the vendor. Conifer/Respan/OpenRouter route at runtime and can't be neutral about vendors they resell. Understudy Labs migrates you to a predetermined destination (open weights). Armature sells the same measurement to the *vendor*. Nobody sells the buyer a defensible switching decision. |
+| **Business model** | OSS engine free. Paid: hosted continuous re-runs and drift alerts, private per-customer benchmarks, and a signed reproducible report. Deliberately *not* shared-savings — taking a cut of savings gives us an incentive to recommend switching, and neutrality is the entire asset. |
+| **Why us** | Deep familiarity with the search-vendor landscape, and a prior body of work (`knowledge-base/`) on exactly what makes a judge trustworthy — agreement, consistency, position bias, self-preference, calibration. |
+
+### 13.15 Open questions from §9, now resolved
+
+| Question | Resolution |
+|---|---|
+| What's the minimum v1? | Web-search bake-off, OSS CLI, local-first. §13.1–13.5. |
+| How does the customer validate the judge? | Not just reported agreement — the human labels *enter the estimator* via IPW correction. The judge doesn't have to be perfect; the estimate has to be valid. §13.3. |
+| What does "tweaking the judge" look like? | Grade-then-refine, not configure-first — criteria drift makes upfront configuration a documented failure mode. §13.6. |
+| Fixed or customer-defined axes? | Quality/latency/cost fixed as the reporting frame; *quality* is defined entirely by the customer's checklist and labels. |
+| Who pays for replay cost? | Customer, BYO keys, with a hard `--budget` cap. A full bake-off is <$50. |
+| Do vendors become customers? | **No.** Structural rule: we never take money from a vendor we rank. Armature (Sp26) already occupies the vendor side; being neutral is the only differentiated position left. |
+| Pricing? | Not shared-savings — it corrupts the recommendation. Per-run / seat / enterprise continuous. |
+| OSS boundary? | Open: engine, adapters, judge framework, rubric packs, report. Paid: hosted continuous runs, drift alerts, private benchmarks, signed reports. Apache-2.0. |
+
+Still open: the name; whether the public leaderboard should launch before or with
+the CLI; and whether rerankers or models is the correct second category.
+
+### 13.16 References
+
+**Statistical core**
+- *Best Arm Identification with LLM Judges and Limited Human Audits* — arXiv 2601.21471 — **the spine of §13.3**
+- Miller, *Adding Error Bars to Evals* — arXiv 2411.00640 (Anthropic)
+- Fisch et al., *Stratified Prediction-Powered Inference* — arXiv 2406.04291
+- *How to Correctly Report LLM-as-a-Judge Evaluations* — arXiv 2511.21140
+- *Valid Best-Model Identification via Low-Rank Factorization* — arXiv 2605.10405
+- Howard et al., time-uniform confidence sequences; Track-and-Stop (fixed-confidence BAI)
+
+**Judge design**
+- Wei et al., *RocketEval: Efficient Automated LLM Evaluation via Grading Checklist* — ICLR 2025, arXiv 2503.05142
+- Verga et al., *Replacing Judges with Juries* — arXiv 2404.18796 (Cohere)
+- *Judging the Judges: Position Bias in Pairwise Comparative Assessments* — arXiv 2406.07791
+- *Justice or Prejudice? Quantifying Biases in LLM-as-a-Judge* — arXiv 2410.02736
+- *Self-Preference Bias in LLM-as-a-Judge* — arXiv 2410.21819
+- Shankar et al., *Who Validates the Validators?* — UIST 2024, arXiv 2404.12272
+
+**Retrieval judging**
+- Upadhyay et al., *UMBRELA* — arXiv 2406.06519 (adopted by TREC 2024 RAG)
+- SimpleQA, FRAMES (824 multi-hop), BrowseComp (1,266 queries) — cold-start seed sets
+
+**Routing (adjacent, not our product)**
+- RouteLLM, RouterBench (AIQ metric), FrugalGPT
+
+**Primary sources for §12.5**
+- `github.com/tavily-ai/tavily-search-evals` · `github.com/exa-labs/benchmarks` · Linkup and Parallel published benchmarks
