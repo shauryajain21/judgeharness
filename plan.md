@@ -1,6 +1,10 @@
-# Planning Doc — Transparent LLM Judges for Vendor Selection
+# JudgeHarness product and implementation plan
 
-*Working draft — brain-dump + distillation. Last updated: July 19, 2026.*
+*Working draft. Last updated July 21, 2026.*
+
+> **Current plan:** [Part III — MVP implementation plan](#part-iii--mvp-implementation-plan).
+> Parts I and II are retained as the research and decision trail; they are not
+> current implementation instructions where they conflict with Part III.
 
 ---
 
@@ -738,113 +742,498 @@ the CLI; and whether rerankers or models is the correct second category.
 
 ---
 
-# Part III — The distilled version
+# Part III — MVP implementation plan
 
-*Appended July 21, 2026. Written after an adversarial pass on Parts I and II.
-Where this conflicts with Part I or II, **this wins** — Parts I and II are kept as
-the reasoning trail, not the current plan.*
+*Rewritten July 21, 2026. This is the current build plan. Parts I and II remain as
+the research and decision trail; where they conflict with this section, this
+section wins.*
 
-## The one-line change
+## 14. Product decision
 
-**Part I sells a want. This sells a must.**
+> **Your model is being retired. Prove its replacement is safe on your own
+> traffic before you ship it.**
 
-Vendor selection is an optimization impulse. Nobody has a deadline for it, so it's
-a once-a-year purchase with a fuzzy buyer. That single fact is behind every real
-objection to Part I: small budget, one-shot revenue, unclear who signs.
+The first product is an **MIT-licensed, local-first audit and decision layer for
+LLM migrations**. An indie developer or small team must be able to install it,
+import results from an eval tool they already use (or use a minimal built-in
+runner), label a small audit sample, and commit a reproducible Markdown/JSON
+migration decision without an account or sales call.
 
-Model deprecation is the same job with a date attached.
+Forced migrations are the first workflow because they have a deadline and an
+obvious incumbent/challenger pair. The product is not another general-purpose
+eval framework: its job is to answer **how much the evaluator can be trusted and
+whether the audited evidence is strong enough to migrate**.
 
-## The product
+### 14.1 Who v1 is for
 
-> **Your model dies in 90 days. Prove the replacement is as good — in a day,
-> not a month.**
+The primary user is a developer who owns an LLM-backed feature and needs to move
+from model A to model B. They have 20–1,000 representative inputs, an application
+prompt, API keys, and perhaps some expected answers, but no dedicated evaluation
+team or platform.
 
-Same engine Part II specced — replay, checklist judge, paired statistics,
-human-audit correction. Only the trigger changes: a deadline someone else set,
-instead of an impulse we have to manufacture.
+The MVP succeeds when that developer can answer:
 
-The deadlines are real and constant:
+1. On my real cases, what improves and what regresses?
+2. Are the observed differences larger than evaluation noise?
+3. Which failures need my review before I migrate?
+4. What will the replacement do to cost, latency, and error rate?
+5. Can another developer reproduce the decision from the saved config and
+   artifacts?
 
-| Event | Date |
-|---|---|
-| GPT-4o retired | Apr 3, 2026 |
-| Claude Sonnet 4 / Opus 4 retired | Jun 15, 2026 |
-| Claude Opus 4.1 retires | Aug 5, 2026 |
-| Assistants API removed (migrate or rebuild) | Aug 26, 2026 |
+### 14.2 OSS first, enterprise later
 
-OpenAI gives 6 months' notice for GA models, 3 for specialized, **2 weeks for
-previews**. Anthropic commits to 60 days. This never stops.
+The complete single-user migration decision workflow stays open source:
 
-What teams do today: 1–4 weeks of shadow traffic at ~2× inference cost across
-~10k cases — or they skip it and hope.
+- importers for common OSS eval outputs and a documented paired-output schema;
+- a minimal LiteLLM replay path for users starting without another eval tool;
+- pairwise/order-swapped judging, local human audit, evaluator calibration, and
+  uncertainty-aware decision statistics;
+- CI-friendly exit codes and diffing between runs;
+- all local storage, bring-your-own-key execution, and public methodology tests.
 
-## Why it sells without a paradigm shift
+We do not cripple the OSS engine to manufacture an upgrade. Enterprises pay when
+the problem becomes organizational rather than individual:
 
-- **They already do this**, by hand, badly. We're faster with error bars. Nothing
-  new to believe.
-- **No adoption curve.** Sold one company at a time. No standard to ratify, no
-  ecosystem, no network effect.
-- **The buyer exists and is funded.** The eng lead who owns the AI product is
-  already paying for this in engineer-weeks.
-- **Recurrence sits on the vendors' calendar, not our upsell deck.** This is the
-  honest answer to "one-shot purchase" — the one that killed the eleven companies
-  in §12.2.
-- **The target list is public.** `endoflife.date`, Quora's model-deprecation
-  tracker, benchr.org/deprecations. GTM is a calendar, not a category.
+- a managed control plane and horizontally scaled/private workers;
+- SSO/SAML, SCIM, RBAC, approval policies, and immutable audit logs;
+- shared datasets, rubric governance, run history, scheduled revalidation, and
+  migration gates in CI/CD;
+- VPC/on-prem deployment, data-retention controls, SLAs, support, and procurement;
+- signed organization reports and fleet-wide visibility across teams/models.
 
-## Market
+None of those enterprise features are required to ship the MVP. The OSS core
+will expose storage and execution interfaces so a hosted product can reuse it
+without forking evaluation logic.
 
-| | Size | Basis |
+### 14.3 Similar OSS and the build-vs-reuse decision
+
+Research completed July 21, 2026. The market already has mature generic runners
+and two young tools aimed directly at migrations. That invalidates any plan to
+win by merely replaying two models and rendering a report.
+
+| Project | What already exists | Decision for JudgeHarness |
 |---|---|---|
-| **TAM** | **$2.7B (2026) → $9.3B (2030)** | LLM observability + evaluation platform market, 36.2% CAGR. The actual budget line we're paid from — not a stretched "AI spend" number. |
-| **SAM** | **~$450–500M → ~$1.6B (2030)** | Change validation specifically: eval is ~35% of that market, of which ~half is validating a change rather than dev-time iteration. Bottom-up agrees: ~20k companies with production LLM apps × ~$20k/yr ≈ $400M. |
-| **SOM** | **~$9M ARR by year 3** (~2% of SAM) | Yr1 20 × $10k · Yr2 100 × $20k · Yr3 300 × $30k |
+| [Promptfoo](https://github.com/promptfoo/promptfoo) (MIT) | Local CLI, model/prompt comparison, many providers, cache, deterministic and model-graded assertions, pairwise `select-best`, cost/latency checks, JSON/JSONL/HTML output, viewer, CI | **Integrate first.** Import its JSON/JSONL results. Do not rebuild its provider catalog, assertion library, cache, viewer, or generic CI runner. |
+| [DeepEval](https://github.com/confident-ai/deepeval) (Apache-2.0) | Pytest-style Python evals, broad metric library, datasets, synthetic data, CI, and explicit model-transition use cases | Add an adapter after Promptfoo. Do not build another metric zoo or pytest plugin in v1. |
+| [Langfuse](https://github.com/langfuse/langfuse) (MIT core) | Datasets, experiments, LLM/code evaluation, human annotation, tracing, self-hosting; monetizes managed hosting and enterprise governance | Treat as an upstream/downstream system. Export/import runs later; copy the commercial pattern, not the platform scope. |
+| [Arize Phoenix](https://github.com/Arize-ai/phoenix) (ELv2) | Versioned datasets, experiments, model comparison, replay, human labels, tracing, and UI | Do not build observability, dataset hosting, or a playground. Keep a neutral artifact adapter boundary. |
+| [EvalShift](https://github.com/babaliauskas/evalshift-cli) (AGPL-3.0+) | Direct migration CLI with replay, structural/semantic/tool-call evaluators, paired tests, CIs, multiple-testing correction, reports, CI, and hosted alpha | Direct competitor. Do not copy or depend on AGPL code. Differentiate on human-calibrated evaluator error and decision auditability; interoperate only through public artifact formats. |
+| [Driftcut](https://github.com/riccardomerenda/driftcut) (MIT) | Direct migration canary with stratified early batches, deterministic checks, tiered judges, cost/latency, early stop/continue/proceed, and HTML reports | Complement rather than clone. It filters whether a full eval is worth running; JudgeHarness audits the final migration claim. Consider a result importer, not a fork. |
+| [evalstats](https://github.com/ianarawjo/evalstats) (MIT package) | Statistical comparisons for eval data: paired/bootstrap analyses, binary-model methods, repeated-run variance, multiple-comparison correction | Reuse for ordinary paired summaries where its API fits. Keep JudgeHarness code focused on evaluator-to-human calibration and migration gates. |
+| [LLM Comparator](https://github.com/PAIR-code/llm-comparator) (Apache-2.0) | Side-by-side visualization of pairwise judgments, repeated ratings, flips, rationales, and slices | Reuse its interchange concepts and optionally export its schema. Do not build a rich visualization app in v1. |
+| [OpenAI Evals](https://github.com/openai/evals) (MIT) | General framework and benchmark registry with JSON/YAML model-graded evals | Support generic JSONL rather than a bespoke dependency. This is a benchmark framework, not the migration decision layer. |
 
-Supporting: $1.1B of VC went into LLM observability and eval startups Jan 2024 –
-Apr 2026. Gartner expects LLM observability to reach 50% of GenAI deployments by
-2028, up from 15% today.
+The differentiating contract is:
 
-## Pricing, and the wedge against incumbents
+> Existing tools tell you what the automated scores say. JudgeHarness measures
+> how often those scores disagree with you, propagates that evaluator error into
+> the migration estimate, and refuses to recommend a migration when the audited
+> evidence is insufficient.
 
-ACVs of $15–40k are anchored in what people already pay: Braintrust Pro $249/mo
-(enterprise custom), Langfuse Enterprise $2,499/mo (~$30k/yr), LangSmith $39/seat.
+The closest published methodology is [*When Your LLM Reaches End-of-Life: A
+Framework for Confident Model Migration in Production Systems*](https://arxiv.org/abs/2604.27082),
+which calibrates automated metrics against human judgments and propagates their
+error with a Bayesian model. Implementing a transparent, reusable OSS version of
+that decision step is the technical wedge.
 
-**The incumbents' pricing model is hostile to this job.** Braintrust meters scores
-at $2.50/1k; LangSmith meters traces the same way. A real migration validation is
-10k production cases × candidates × order-swaps — tens of thousands of scores
-*before a decision exists*. They were built for dev-time iteration, not
-deadline-driven bulk comparison. We price per migration, which is how the buyer
-already thinks about the problem.
+### 14.4 Competitive kill criterion
 
-## How the Part I vision survives
+Before building a hosted product, run the same three migrations through
+Promptfoo alone, EvalShift, Driftcut, and JudgeHarness. Stop or reposition if
+JudgeHarness cannot demonstrate at least one of these on two of three runs:
 
-It gets earned instead of assumed:
+- catch a confident automated-evaluator mistake after human calibration;
+- change an unsafe raw-score “migrate” verdict to “insufficient evidence” or
+  “do not migrate” for an explainable reason;
+- reach the same defensible conclusion with materially fewer human labels;
+- produce an audit trail that an independent reviewer can reproduce more easily.
 
+If it only adds another report on top of the same scores, contribute an adapter
+or calibration feature to an existing OSS project instead of shipping a company.
+
+## 15. The MVP contract
+
+### 15.1 One golden-path workflow
+
+```bash
+# Install without creating an account
+pipx install judgeharness
+
+# Create judgeharness.yaml, rubric.yaml, and an example paired-results file
+judgeharness init migration
+
+# Preferred: normalize results from an existing eval run
+judgeharness import promptfoo ./promptfoo-results.json --run ./migration-audit
+# Also supported: a stable generic paired JSONL contract
+judgeharness import paired ./paired-results.jsonl --run ./migration-audit
+
+# Convenience path when the user has no runner; deliberately minimal
+judgeharness run --config judgeharness.yaml --budget-usd 20
+
+# Label the audit sample selected to calibrate the automated evaluator
+judgeharness audit ./migration-audit
+
+# Fit calibration, propagate uncertainty, and generate the decision report
+judgeharness decide ./migration-audit
+
+# Optional CI gate: non-zero when configured regression limits are crossed
+judgeharness check ./migration-audit
 ```
-forced migration  →  harness is wired up + labels exist  →  "should we switch
-(deadline, easy sell)   (the expensive part, now paid for)    vendors entirely?"
-                                                              (nearly free to ask)
+
+The first release supports **one incumbent and one challenger per run**. This is
+the forced-migration job and keeps the report and statistics legible. Multi-model
+tournaments come later.
+
+### 15.2 Inputs
+
+`judgeharness.yaml` contains:
+
+- incumbent/challenger names and the source adapter (`promptfoo`, `paired`, or
+  `litellm`);
+- paths to imported results, dataset, rubric, and optional deterministic scores;
+- judge model and the human-audit sampling policy;
+- for the optional runner only: prompt template, model identifiers, budget,
+  concurrency, timeout, and retry limits;
+- acceptance thresholds such as maximum regression rate, minimum reviewed
+  cases, and maximum cost/latency change.
+
+The generic `paired-results.jsonl` contract has one versioned schema:
+
+```json
+{"id":"support-001","input":{"question":"..."},"incumbent":{"output":"...","latency_ms":820,"cost_usd":0.003},"challenger":{"output":"...","latency_ms":510,"cost_usd":0.001},"scores":{},"tags":{"intent":"refund","criticality":"high"}}
 ```
 
-**Migrations get us in the door and buy the calibration labels. Vendor selection
-is the expansion.** That's the reverse of Part I's ordering — and it's the
-direction where the customer has a deadline instead of a maybe.
+Required fields are `id`, `input`, `incumbent.output`, and
+`challenger.output`. Timing, cost, deterministic scores, expected output, and
+tags are optional. Importers preserve source identifiers and reject lossy or
+ambiguous mappings. Secrets and raw provider keys are never copied into run
+artifacts.
 
-## What we stopped believing
+`rubric.yaml` defines 1–8 binary or small ordinal criteria with descriptions,
+weights, and optional hard-fail status. Ship starter rubrics for general
+assistant quality, extraction/structured output, RAG answers, and support agents.
 
-| Part I / II claimed | Why it's wrong |
+### 15.3 Outputs
+
+Every run is a self-contained directory:
+
+```text
+runs/<run-id>/
+├── manifest.json        # versions, source, hashes, timestamps, completeness
+├── pairs.jsonl          # normalized incumbent/challenger evidence
+├── judgments.jsonl      # criteria, evidence, swaps, judge identity
+├── audit-labels.jsonl   # append-only human decisions
+├── calibration.json     # audit sample + judge error posterior
+├── decision.lock.json   # hashes, corrected estimate, gate outcome
+├── report.md
+└── report.html
+```
+
+The report begins with one of three conclusions: **safe to migrate**, **do not
+migrate**, or **insufficient evidence**. It shows the raw automated result next
+to the human-calibrated estimate, posterior/credible interval, audit confusion
+matrix, reviewer coverage, judge flip rate, deterministic failures, cost,
+latency, results by tag/criticality, and a drill-down list of regressions with
+quoted evidence. When raw and corrected conclusions differ, that difference is
+the headline—not an appendix footnote.
+
+The tool must never turn an order-swap flip, invalid judge response, provider
+error, or missing run into a silent tie.
+
+### 15.4 The developer workflow is Git-native
+
+The primary integration is a local CLI that produces a reviewable lockfile, then
+a pull-request check that verifies it. Human labeling stays local in OSS; CI is
+non-interactive and never invents answers.
+
+**One-time repository setup**
+
+```bash
+judgeharness init --from promptfoo
+```
+
+This discovers `promptfooconfig.yaml` where possible and creates:
+
+```text
+evals/model-migration/
+├── judgeharness.yaml       # committed policy and source mapping
+├── rubric.yaml            # committed material-regression definition
+├── audit-labels.jsonl     # committed only when inputs are safe
+├── decision.lock.json     # committed hashes + calibrated decision
+└── report.md              # optional human-readable PR artifact
+```
+
+Raw pairs, prompts, responses, provider payloads, and caches are gitignored by
+default. The lockfile records their hashes and source provenance without copying
+secrets or sensitive contents into Git.
+
+**Migration preparation**
+
+```bash
+promptfoo eval --output results.json
+judgeharness import promptfoo results.json --run ./migration-audit
+judgeharness audit ./migration-audit
+judgeharness decide ./migration-audit \
+  --lock evals/model-migration/decision.lock.json
+```
+
+The developer commits the model/config change, policy, and lockfile in the same
+PR. If more evidence is required, `decide` exits with a distinct
+`INSUFFICIENT_EVIDENCE` code and prints the exact command/sample needed next.
+
+**Pull-request verification**
+
+`judgeharness init --github-action` scaffolds a workflow that runs when model
+identifiers, prompts, tool schemas, eval configuration, migration policy, or the
+lockfile changes. `judgeharness check` then:
+
+1. verifies source/config/rubric/audit hashes against the lockfile;
+2. recalculates the calibrated decision without interactive labeling;
+3. fails when evidence is stale, a hard gate is crossed, or labels are missing;
+4. writes a compact GitHub Step Summary and uploads the full local report;
+5. uses stable exit codes for safe, unsafe, insufficient, stale, and invalid.
+
+The OSS GitHub Action runs entirely on the customer's runner with BYO provider
+keys. It must not make paid model calls on untrusted fork PRs; those workflows
+use existing artifacts only or require a trusted environment approval.
+
+Do not build a GitHub App for MVP. A later enterprise App can publish a rich
+Check Run, request reviewers, resume after approvals, and link to a hosted/private
+audit queue. The portable lockfile and CLI exit codes remain the source of truth.
+
+### 15.5 Production evidence comes later through standards
+
+Do not require a proprietary tracing SDK. After the PR workflow works, add an
+OpenTelemetry GenAI importer that samples representative production cases:
+
+```bash
+judgeharness dataset import otel ./traces \
+  --sample 500 --stratify intent,region --redact
+```
+
+Prompt/response content is opt-in because GenAI traces can contain sensitive
+messages, tool schemas, tool arguments, and tool results. The default importer
+accepts sanitized local exports; continuous collection belongs to the enterprise
+worker/control plane, not the OSS MVP.
+
+## 16. Evaluation protocol for v1
+
+The v1 decision endpoint is deliberately narrow: **did the challenger introduce
+a material quality regression on this case?** Improvements, ties, latency, cost,
+and deterministic failures are still reported, but the calibrated gate is based
+on this binary risk because it is easy for a human to label and explain.
+
+1. **Import and normalize.** Map Promptfoo or generic paired results into a
+   canonical schema. Reject duplicate IDs, unpaired outputs, unknown source
+   versions, and lossy mappings. Preserve raw source files and hashes.
+2. **Add missing judgments.** Reuse deterministic/source scores. For cases without
+   a quality verdict, run a rubric-driven pairwise judge in both A/B orders with
+   forced structured output and quoted evidence. Aggregate only in code.
+3. **Form audit strata.** Partition by automated regression/non-regression,
+   order-swap flip, deterministic failure, criticality, and user tags. Select a
+   seeded random sample within each relevant stratum; always include invalid
+   judgments and critical hard failures.
+4. **Collect blind human labels.** The reviewer sees input and both responses in
+   randomized order, not model identity or the automated verdict. They label
+   “material regression: yes/no/unsure” and the failed criterion. `unsure` stays
+   missing; it is never coerced into a tie.
+5. **Calibrate within strata.** For each audited stratum, fit a beta-binomial
+   posterior for the true material-regression prevalence, then weight posterior
+   draws by the full stratum sizes. This directly propagates human-audit
+   uncertainty to the overall regression rate without treating judge output as
+   ground truth.
+6. **Check calibration adequacy.** Show the audit confusion matrix and agreement,
+   but do not use agreement alone as proof. Refuse a decision if a consequential
+   stratum has no labels, the effective audit count is below the configured
+   minimum, reviewer disagreement is unresolved, or the posterior is too wide.
+7. **Apply user-owned gates.** If the corrected interval is wholly below the
+   allowed regression rate, report **safe to migrate**; wholly above it, **do not
+   migrate**; otherwise, **insufficient evidence**. Deterministic hard failures
+   can independently block migration when the committed config says so.
+8. **Make the delta auditable.** Report raw automated and corrected estimates
+   side by side, every prior/seed/stratum weight, sensitivity to reasonable prior
+   choices, and the exact additional labels most likely to resolve an
+   insufficient decision.
+
+Validate coverage and false-decision rates with simulation before live use. The
+simulation matrix must include rare regressions, a systematically biased judge,
+small/imbalanced strata, missing labels, order bias, and perfect/adversarial
+evaluators. Judge panels, IPW/PPI estimators, and anytime-valid sequential
+stopping remain post-MVP until they beat this transparent baseline in simulation.
+
+## 17. Implementation architecture
+
+### 17.1 Package layout
+
+```text
+src/judgeharness/
+├── cli.py               # Typer commands and stable exit codes only
+├── config.py            # Pydantic config and environment resolution
+├── models.py            # versioned pair/judgment/audit/decision schemas
+├── adapters/
+│   ├── base.py          # ResultAdapter protocol + mapping diagnostics
+│   ├── paired.py        # canonical JSONL importer
+│   └── promptfoo.py     # Promptfoo JSON/JSONL importer
+├── judging.py           # fill missing pairwise judgments + order swap
+├── sampling.py          # seeded stratified audit selection
+├── audit.py             # blind local terminal labeling
+├── calibration.py       # beta-binomial posterior + diagnostics
+├── decision.py          # user gates and insufficient-evidence rules
+├── summaries.py         # evalstats-backed descriptive comparisons
+├── reports.py           # Markdown, JSON, static HTML
+├── storage.py           # LocalArtifactStore protocol + implementation
+└── runner/              # optional thin LiteLLM convenience path
+    ├── provider.py
+    └── replay.py
+tests/
+├── fixtures/
+├── unit/
+├── integration/
+├── simulation/
+└── golden/
+examples/
+├── support-agent/
+└── structured-extraction/
+```
+
+Keep the CLI thin. Import, sampling, calibration, decision, and report generation
+must be callable as Python library functions. The canonical schema is the stable
+center; adapters may track upstream versions independently.
+
+### 17.2 Stack and operational rules
+
+- Python 3.11+, `typer`, `pydantic`, `jinja2`, `numpy`, and the MIT-licensed
+  `evalstats` package where its public API covers descriptive paired analysis;
+- `litellm` and SQLite are optional dependencies used only by the convenience
+  runner and missing-judgment path;
+- JSONL/JSON are the source of truth for portable run artifacts;
+- `uv` for development/locking, `pytest` + `pytest-asyncio`, `ruff`, and `mypy`;
+- atomic artifact writes and an append-only event/label path so interrupted runs
+  resume without corrupting or repaying for completed work;
+- seeded sampling and posterior draws; content hashes include every input that
+  can change a judgment or decision;
+- no network calls except configured model providers, no telemetry by default,
+  and an opt-in redaction hook before replay or judging.
+
+### 17.3 Enterprise seams, not enterprise features
+
+Define three protocols in the OSS package:
+
+- `ResultAdapter`: normalize an external tool's result without losing provenance;
+- `ArtifactStore`: read/write manifests, records, labels, and reports;
+- `JudgeProvider`: fill missing semantic judgments and report normalized usage.
+
+The MVP ships Promptfoo/generic importers, local artifacts, and optional LiteLLM
+judging. A future paid control plane can add remote workers, object storage, and
+organization policy without changing the calibration or report semantics.
+
+## 18. Build sequence
+
+Each phase must leave the repository runnable and tested. Do not start the next
+phase while the current exit test is failing.
+
+| Phase | Implement | Exit test |
+|---|---|---|
+| **0. Contract** | Package/CLI skeleton, canonical schemas, generic paired importer, source manifest/hashes, offline fixtures, lint/type/test CI | A clean checkout imports an offline paired fixture and round-trips it without field or provenance loss |
+| **1. Promptfoo bridge** | Version-detected Promptfoo JSON/JSONL importer, mapping diagnostics, source-score preservation, export fixtures from real Promptfoo runs | Three Promptfoo fixtures (deterministic, model-graded, partial/error) normalize correctly; unknown shapes fail loudly |
+| **2. Audit loop** | Both-order judge for missing verdicts, seeded audit strata/sample, blind terminal labeling, append-only labels | A reviewer can finish and resume a blind audit; every sampled item and exclusion has a reproducible reason |
+| **3. Calibrated decision** | Beta-binomial stratum model, corrected regression posterior, adequacy rules, thresholds, sensitivity analysis, `decision.lock.json` | Simulation meets nominal interval coverage and bounded false-safe rate across the adversarial matrix; failing cases return insufficient evidence |
+| **4. Git-native release** | Raw-vs-corrected reports, lockfile verification, stable exit codes, GitHub Action scaffold, Step Summary/artifact output, Promptfoo tutorial, privacy/methodology docs, PyPI workflow | A Promptfoo user reaches an audited decision in under 15 minutes; a PR check reproduces it without paid calls and rejects a stale lockfile |
+| **5. Convenience runner (cut first)** | Thin LiteLLM two-model replay, budget estimate/cap, cache/resume | Only ship if Phases 0–4 are complete; its output must be indistinguishable from imported canonical pairs to downstream code |
+
+## 19. MVP acceptance criteria
+
+The first public release is done only when all of these are true:
+
+- `pipx install judgeharness` works on macOS and Linux with Python 3.11–3.13.
+- Current Promptfoo JSON and JSONL exports plus canonical paired JSONL import
+  without losing outputs, scores, errors, cost/latency, tags, or provenance.
+- A user can reach a decision from an existing Promptfoo run without signing up
+  for JudgeHarness or making duplicate incumbent/challenger calls.
+- Every automated verdict has schema-valid criterion scores and evidence, or is
+  explicitly marked invalid and placed in the audit queue.
+- Audit selection and response order are seeded, blind, resumable, and fully
+  reproducible; an `unsure` human label never becomes a pass or tie.
+- The calibration simulation suite meets its documented coverage and false-safe
+  targets for rare, biased, imbalanced, and missing-label scenarios.
+- The report presents raw and human-corrected regression estimates side by side,
+  discloses every prior and adequacy check, and can produce all three conclusions.
+- `judgeharness check` verifies a committed lockfile non-interactively, rejects
+  stale hashes, and emits stable CI status plus a GitHub Step Summary.
+- The generated GitHub Action never exposes provider secrets to untrusted fork
+  PRs and uploads sensitive reports only under an explicit repository policy.
+- The same imported artifacts, config, audit labels, and seed produce the same
+  decision and metrics.
+- Unit, adapter, simulation, and golden-report tests run without paid API calls;
+  live judge/runner smoke tests are opt-in.
+- The README contains a copy-paste quickstart, a sample report, cost/privacy
+  behavior, source compatibility table, methodology, and limitations.
+- At least three external developers complete migrations without founder help;
+  at least one sees calibration materially change the raw automated conclusion.
+
+## 20. Explicit non-goals for MVP
+
+- hosted accounts, dashboards, teams, SSO, RBAC, billing, or a sales-assisted
+  workflow;
+- replacing Promptfoo/DeepEval, maintaining a broad provider catalog, or building
+  a general assertion/metric framework;
+- requiring JudgeHarness to execute the original eval—the convenience runner is
+  cut before any audit/calibration/report work;
+- continuous production monitoring or an always-on proxy/gateway;
+- more than one challenger, automatic model selection, or runtime routing;
+- web-search/reranker/vendor bake-offs;
+- OTel ingestion, proprietary SDKs, or integrations with every eval platform;
+- model fine-tuning, mechanistic interpretability, or a public leaderboard;
+- advanced debiasing estimators whose assumptions the user cannot inspect;
+- enterprise certifications or compliance claims.
+
+## 21. Launch and learning loop
+
+Launch the repository and PyPI package around a real, reproducible Promptfoo
+migration example where the audited conclusion differs from—or meaningfully
+qualifies—the raw automated score. Distribution is developer-led: integrations
+and example PRs in adjacent OSS communities, GitHub, Hacker News, relevant model
+deprecation issues/forums, and provider migration guides. The call to action is:
+
+```bash
+promptfoo eval --output results.json
+judgeharness import promptfoo results.json --run ./migration-audit
+judgeharness audit ./migration-audit
+judgeharness decide ./migration-audit
+```
+
+Instrument nothing by default. Ask users to opt into an anonymous post-run
+survey or share a sanitized report. Track:
+
+- install-to-first-completed-run conversion;
+- import success/failure by upstream tool/version;
+- time and number of human labels to a decision;
+- raw automated conclusions changed or downgraded after calibration;
+- insufficient-evidence runs resolved by the suggested next labels;
+- migrations stopped or changed because of an audited regression;
+- repeat runs when the next deprecation occurs;
+- inbound enterprise requests for collaboration, governance, private deployment,
+  and support.
+
+Do not build the hosted enterprise product until OSS users pull it into teams.
+The trigger is repeated evidence that multiple developers at the same company
+need shared runs, policy, access control, or deployment help—not a speculative
+feature roadmap.
+
+## 22. Decisions locked for implementation
+
+| Question | Decision |
 |---|---|
-| "The moat is an insanely good LLM judge" (§3) | A 2B model with a checklist matches GPT-4o (§12.7e). Judging is commoditized. The moat is the calibration labels and the neutrality position. |
-| Vendor selection is the wedge | It's the expansion. Forced migration is the wedge. |
-| Web-search APIs first | Models first — that's where the deadlines and the budget are. Search stays as a later category. |
-| Continuous monitoring converts one-shot into recurring | That's the story that killed eleven YC companies. The deprecation calendar is the real recurrence engine. |
-| Transparency is the thesis (§1) | It's a founder preference with no buyer evidence. It's a *feature* that makes the report defensible — not a reason anyone buys. |
-
-## Next three things
-
-1. Rebuild v1 around a single forced migration (a real deprecation date, a real
-   customer) rather than a search bake-off.
-2. Land 3 design partners off the current deprecation calendar — they have a
-   deadline, so the ask is easy.
-3. Get one number worth quoting: *"we validated a production model migration in
-   X hours instead of Y weeks, and caught a regression they would have shipped."*
+| Initial job | Validate one forced LLM migration |
+| Initial user | Indie developer or small product/engineering team |
+| Distribution | MIT OSS CLI and Python library, self-serve, no account |
+| Data posture | Local artifacts, BYO keys, no telemetry by default |
+| Comparison | One incumbent vs. one challenger, paired on every case |
+| Primary input | Promptfoo results first; stable generic paired JSONL always |
+| Execution | Import-first; thin LiteLLM runner is optional and cut first |
+| Evaluation | Existing scores + both-order judge where needed + blind stratified human audit |
+| Calibration | Beta-binomial true-regression prevalence within audited strata |
+| Decision | User-owned thresholds; safe / do not migrate / insufficient evidence |
+| Revenue | Enterprise control plane, governance, scale, deployment, and support |
+| OSS boundary | Import, audit, calibration, decision, reports, and methodology tests stay open |
+| First proof | Three unassisted migrations and one material raw-vs-corrected conclusion change |

@@ -1,5 +1,10 @@
 # 08 — Market & the pivot
 
+> **Historical research, superseded July 21, 2026.** The current wedge is
+> Git-native approval infrastructure for forced LLM migrations. See
+> [`../plan.md`](../plan.md#part-iii--mvp-implementation-plan). This file remains
+> as the reasoning trail and is not an implementation roadmap.
+
 Where the wedge points, and why. "Evaluate an LLM judge" is a real pain but a
 hard *product* to sell. The asset that transfers is bigger than the framing.
 

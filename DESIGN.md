@@ -1,84 +1,187 @@
 # Design notes
 
-The whole idea in one line: **evaluate the evaluator.** JudgeHarness is a meta-eval —
-it doesn't judge outputs, it measures whether *your judge* can be trusted to.
+JudgeHarness is a Git-native control plane for LLM migrations. Its core invariant
+is simple: **a migration may pass only when a reproducible, human-calibrated
+decision supports the repository's committed policy.**
 
-## Core objects (keep it to ~4)
+## Product boundary
 
-```yaml
-# 1. Dataset — your calibration / gold set (the answer key)
-dataset:
-  - id: ex1
-    input: "..."          # the thing being judged (or an A/B pair)
-    gold: "A"             # human verdict — the ground truth
-    meta: { domain: code }
+Existing tools execute evals. JudgeHarness consumes their evidence and owns:
 
-# 2. Judge — a frozen, versioned config
-judge:
-  id: code-review-v3
-  model: gpt-5-mini
-  mode: pairwise          # or "score"
-  temperature: 0
-  rubric: ./rubrics/code_review.yaml
-  output_schema: per_criterion   # forces structured verdict
+1. normalization into a stable paired-result contract;
+2. blind, stratified human-audit selection;
+3. automated-evaluator calibration;
+4. uncertainty-aware migration policy;
+5. a content-addressed decision lockfile;
+6. local and CI verification of that lockfile.
 
-# 3. Rubric — domain-specific criteria (the contributable pack)
-rubric:
-  criteria:
-    - name: correctness
-      weight: 0.5
-      guide: "Does it compile & handle edge cases?"
-    - name: clarity
-      weight: 0.3
-    - name: security
-      weight: 0.2
+Promptfoo is the first adapter, not the runtime foundation. Generic paired JSONL
+is supported from the start. A thin LiteLLM runner is optional and uses the same
+canonical contract as imported results.
 
-# 4. Report — auto-generated, committable
-report:
-  judge: code-review-v3
-  agreement: 0.94
-  flip_rate: 0.02
-  self_consistency: 0.97
-  cost_per_judge: 0.0011
+## Core objects
+
+### Pair
+
+One representative input with incumbent and challenger evidence:
+
+```json
+{
+  "schema_version": 1,
+  "id": "support-001",
+  "input": {"question": "..."},
+  "incumbent": {"output": "...", "latency_ms": 820, "cost_usd": 0.003},
+  "challenger": {"output": "...", "latency_ms": 510, "cost_usd": 0.001},
+  "scores": {},
+  "tags": {"intent": "refund", "criticality": "high"},
+  "provenance": {"adapter": "promptfoo", "source_id": "..."}
+}
 ```
 
-## Pipeline (5 stages)
+### Judgment
 
-1. **Load** dataset + judge config.
-2. **Expand** into runs: N repeats × A/B-swapped × candidate models.
-3. **Execute** (async, cached by hash — never re-pay for a run you've done).
-4. **Score** against gold + compute meta-metrics.
-5. **Report** — markdown + JSON leaderboard.
+An automated material-regression verdict with rubric criteria, quoted evidence,
+judge identity/configuration, response order, schema status, and source score.
+Both A/B orders are required when JudgeHarness supplies the judgment.
 
-## Meta-metrics (the "trust score")
+### Audit label
 
-- **Agreement** — does judge match human labels? (accuracy / Cohen's κ)
-- **Consistency** — same input, N runs → same verdict?
-- **Position bias** — swap A/B → does verdict flip? (should be ~0)
-- **Self-preference** — does a GPT-judge favor GPT-outputs?
-- **Calibration** — when judge says "9/10 confident," is it right 90% of the time?
+An append-only blind human decision: material regression `yes`, `no`, or
+`unsure`, plus failed criterion and optional note. The record includes reviewer
+identity only when explicitly configured; local OSS defaults to an opaque ID.
 
-## Commands
+### Decision lockfile
 
-- `init` — scaffold a project + starter gold sets per domain.
-- `label` — bootstrap-assisted answer key (a *stronger* model drafts, you confirm).
-- `sweep` — the money command: {models} × {prompts} × {temp}, order-swapped, N repeats.
-- `report` — committable markdown + JSON.
+`decision.lock.json` commits:
 
-## Opinionated defaults (baked-in trust)
+- hashes of normalized pairs, policy, rubric, judgments, and audit labels;
+- source adapter/version and upstream artifact hashes;
+- sampling seed, strata, inclusion probabilities, priors, and software version;
+- raw and calibrated regression estimates with intervals;
+- adequacy diagnostics, threshold values, and final outcome;
+- no raw prompts, responses, secrets, or provider payloads.
 
-- `temperature=0` + forced JSON schema (kills most flakiness).
-- Auto A/B order swap + report `flip_rate` (kills position bias).
-- Require per-criterion justification (kills opacity).
-- Refuse to emit a verdict if schema validation fails (no silent garbage).
-- `label` must use a different/stronger model than the judge under test.
+## Decision pipeline
 
-## Stack
+```text
+external results
+      │
+      ▼
+validate + normalize ──────── preserve source + hashes
+      │
+      ▼
+fill missing judgments ───── pairwise, both orders, forced schema
+      │
+      ▼
+stratified audit sample ───── verdict × flip × criticality × tags
+      │
+      ▼
+blind local labels ────────── yes / no / unsure
+      │
+      ▼
+calibrate by stratum ──────── posterior true-regression prevalence
+      │
+      ▼
+apply committed policy ───── safe / unsafe / insufficient
+      │
+      ▼
+lockfile + report + CI status
+```
 
-Python · `pydantic` (schemas) · `litellm` (multi-provider adapter) · local SQLite/JSON cache.
-No server, no DB. Runs in CI.
+The first calibrated endpoint is binary: whether the challenger introduces a
+material quality regression on a case. Cost, latency, deterministic errors,
+improvements, and tags are reported and may be hard policy gates, but they do not
+get mixed into an unexplained composite trust score.
 
-## Non-goals
+## Git workflow
 
-- Not a public benchmark (SimpleQA etc. test *models*, not *your judge*).
-- No mid-verdict "nudging" — iteration happens at rubric-design time, then you freeze.
+Repository-owned files:
+
+```text
+evals/model-migration/
+├── judgeharness.yaml
+├── rubric.yaml
+├── audit-labels.jsonl     # only when safe to commit
+├── decision.lock.json
+└── report.md              # optional
+```
+
+Local-only files:
+
+```text
+.judgeharness/
+├── imports/
+├── pairs.jsonl
+├── judgments.jsonl
+├── cache.sqlite
+└── reports/
+```
+
+`judgeharness check` is non-interactive. It verifies hashes, recomputes the
+decision, writes a GitHub Step Summary when available, and exits with a stable
+status:
+
+| Outcome | Meaning |
+|---|---|
+| `0 SAFE` | Evidence is current and policy permits migration |
+| `10 UNSAFE` | Corrected risk or a hard gate blocks migration |
+| `11 INSUFFICIENT` | More human evidence is required |
+| `12 STALE` | Lockfile does not match current inputs/configuration |
+| `13 INVALID` | Artifact, schema, or calibration validation failed |
+
+The generated GitHub Action runs with least privilege. It never receives
+provider secrets on untrusted fork PRs and does not upload raw reports unless the
+repository policy explicitly permits it.
+
+## OSS architecture
+
+```text
+src/judgeharness/
+├── adapters/       # promptfoo + generic paired JSONL
+├── models.py      # versioned canonical schemas
+├── judging.py    # optional missing-verdict judge
+├── sampling.py   # seeded audit strata and selection
+├── audit.py      # blind, resumable terminal labeling
+├── calibration.py
+├── decision.py   # policy and adequacy rules
+├── lockfile.py
+├── reports.py
+├── storage.py    # local artifact protocol
+└── cli.py
+```
+
+Python 3.11+, Typer, Pydantic, NumPy, Jinja, JSONL/JSON artifacts, and optional
+LiteLLM/SQLite for missing judgments or the convenience runner. Statistical
+coverage and false-safe behavior are tested with offline simulations; paid API
+calls are never required by the default test suite.
+
+## Enterprise architecture
+
+The enterprise product replaces local backends without changing decision
+semantics:
+
+```text
+GitHub/GitLab             enterprise control plane
+     │                    projects · policy · identity
+     ▼                              │
+required check ◄──── signed decision/artifact metadata
+                                    │
+                         customer VPC worker plane
+                         replay · judge · audit queue
+                                    │
+                         object store + metadata DB
+```
+
+Paid capabilities are organizational: SSO/SCIM/RBAC, approvals, shared evidence,
+model inventory and deprecation tracking, scheduled revalidation, immutable
+audit logs, private workers, retention controls, and support. The evaluation
+logic, artifact schema, calibration, and individual Git workflow remain OSS.
+
+## Non-goals for the MVP
+
+- a provider catalog, generic assertion library, experiment tracker, or dashboard;
+- a proprietary tracing SDK—future production imports use OpenTelemetry;
+- runtime routing, an always-on proxy, or automatic model selection;
+- more than one incumbent/challenger pair per decision;
+- a GitHub App or hosted human-review UI;
+- mechanistic interpretability or a public benchmark.

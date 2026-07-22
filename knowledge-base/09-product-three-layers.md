@@ -1,61 +1,77 @@
-# 09 — Product: three layers, one engine
+# 09 — Product layers: one decision contract
 
-Same backend (the harness from `06-architecture.md`, pointed at graders instead of
-outputs). Three surfaces on top, each a different stage of the funnel.
+The product expands by coordination scope, not by withholding evaluation logic.
 
-```
-                 ┌─────────────────────────────────────────┐
-                 │   ENGINE  (sweep + trust metrics + J-lens) │
-                 │   behavioral battery + reward-hack attacks  │
-                 └─────────────────────────────────────────┘
-                    ▲              ▲                  ▲
-        ┌───────────┘        ┌─────┘          ┌───────┘
-   1. FREE GRADER        2. OSS CLI        3. B2B PLATFORM
-   (top of funnel)       (dev wedge)       (revenue)
-   web, no signup        npx, GitHub       continuous cert
-   shareable score       Action            + interp moat
+```text
+              DECISION CONTRACT
+   evidence → audit → calibration → policy → lockfile
+          ▲                 ▲                 ▲
+          │                 │                 │
+   1. OSS LOCAL       2. GIT WORKFLOW    3. ENTERPRISE
+   individual use     team adoption      organization control
 ```
 
-## Layer 1 — Free grader (the Product Hunt hero, top of funnel)
+## Layer 1 — OSS local workflow
 
-Paste an eval prompt / pick a model → **0–100 reliability score + a shareable
-report card** in 30s. No signup. The card is the viral loop.
-- Checks: position bias, length bias, self-preference, sycophancy, **gameability**.
-- Pattern = HubSpot Website Grader / GPTZero: score free, the *fix* gated.
+For indie developers and small teams:
 
-## Layer 2 — OSS CLI (the developer wedge, bottom-up land)
+- import Promptfoo or generic paired results;
+- audit a blind, stratified sample in the terminal;
+- produce raw and corrected regression estimates;
+- emit safe, unsafe, or insufficient evidence;
+- write portable reports and a content-addressed lockfile.
 
-```
-npx gradecheck <your-judge>     # red/green report in the terminal
-```
-Plus a GitHub Action. Buys the open-source badge, Hacker News + Dev Hunt reach,
-and bottom-up adoption (the Snyk motion). Free tier generous; continuous runs paid.
+No account, telemetry, hosted storage, or proprietary SDK. This entire layer is
+MIT licensed and useful on its own.
 
-## Layer 3 — B2B platform (the revenue)
+## Layer 2 — Git workflow
 
-Gated behind the free score:
-- **Continuous certification** in the training/RL loop; reward-drift alerts.
-- A signed, version-hashed **Verifier Trust Report** vendors attach to lab deliverables.
-- A **"Judge Certified" badge** for model cards / READMEs.
-- **Interpretability tier** (open-weight): read whether the grader *internally*
-  represents "I'm being gamed" even when its score looks clean. The moat.
+The developer wedge becomes team infrastructure when the migration lockfile is
+reviewed with the model change:
 
-## The engine (what all three call)
+- repository-owned `judgeharness.yaml`, rubric, and decision lockfile;
+- generated GitHub Action and stable CI exit codes;
+- required check for model, prompt, tool-schema, or policy changes;
+- stale-evidence detection and explicit insufficient-evidence remediation;
+- Step Summary and policy-controlled build artifacts.
 
-- **Behavioral battery** — already specced in `02` + `05`: order-swap → flip-rate,
-  criterion ablation, paraphrase, authority injection, cross-generator self-pref,
-  consistency-N. Ships now, any API model.
-- **Reward-hack attack library** — the new build: adversarial candidates that
-  *farm reward without solving* (verbosity, format-matching, reference leakage,
-  sycophancy triggers, spec-gaming). Measures reward↔solve correlation +
-  hack-susceptibility. Bounded, well-scoped (reward-hack benchmark literature
-  gives the taxonomy).
-- **Interpretability tier** — logit lens first, then J-lens (`04`). v2, open-weight.
+This is the adoption loop: one developer creates a migration decision; the team
+makes the check required; every future model change inherits the evidence
+discipline.
 
-## Why one engine, three surfaces
+## Layer 3 — Enterprise control plane
 
-The free grader generates the shareable **failure-signature dataset** (the data
-flywheel / moat). It's simultaneously: PH virality, YC traction proof, design-partner
-bait, and top-of-funnel for the certification contracts. One artifact, every channel.
+Enterprises pay when local artifacts need organization-wide coordination:
 
-> Free score → OSS scan lands in the org → team-wide continuous certification.
+- inventory of production systems, providers, models, owners, and deprecations;
+- shared datasets, rubrics, label queues, and approval policies;
+- VPC/on-prem workers, managed queues, caching, budgets, and secret integration;
+- SSO, SCIM, RBAC, separation of duties, and immutable audit logs;
+- scheduled revalidation and deployment gates across repositories;
+- retention/residency controls, SLAs, procurement, and support.
+
+The control plane stores signed artifact metadata and policy state. Sensitive
+execution can remain in customer infrastructure. Enterprise features never
+change the meaning of an OSS decision lockfile.
+
+## Why this can compound
+
+Each completed migration creates reusable, customer-owned assets:
+
+- representative paired cases;
+- human labels and known evaluator failure modes;
+- a calibrated rubric and decision policy;
+- provenance linking a model change to its approval evidence.
+
+The next migration needs fewer setup decisions and exposes organization-wide
+needs naturally. The expansion path is therefore:
+
+> local audited migration → required repository check → shared organizational
+> policy and evidence infrastructure
+
+## Explicitly abandoned layers
+
+The earlier free web grader, verifier certification, reward-hack scanner, and
+mechanistic-interpretability tier are not the current roadmap. Their research
+remains in this knowledge base, but none should block or dilute the model-
+migration workflow.

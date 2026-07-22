@@ -1,60 +1,65 @@
-# 01 — Brainstorm decisions
+# 01 — Locked product decisions
 
-Locked decisions from the brainstorm, plus open questions.
+The canonical implementation plan is Part III of [`../plan.md`](../plan.md).
+This file is the compact decision register.
 
-## Locked
+## Product
 
-| Decision | Choice | Rationale |
+| Decision | Choice | Reason |
 |---|---|---|
-| Judging modes | **Both** pairwise (A/B) and absolute scoring | User does both roughly equally |
-| Ground truth | **Domain calibration set** (20–50 examples), not public benchmarks | Public sets test the *model*, not *your judge on your task* |
-| Artifact | **Brainstorm/spec first**, then OSS CLI | User wanted to think it through before building |
-| Distribution | **Public / OSS** | "Maximize distribution someway" |
-| Primary surface | **CLI + config files** | Most OSS-native, CI-friendly |
-| Gold set creation | **Semi-auto bootstrap** — strong model drafts labels, human confirms | Kills the "labeling is boring → skip it → back to vibes" trap |
-| Domains | **General-purpose harness, many rubric packs** | User judges code, text, agent, RAG — all of them |
+| Initial job | Validate one forced LLM migration | Deadline, incumbent, and challenger are explicit |
+| Initial user | Indie developer or small product team | Self-serve OSS can reach them without enterprise sales |
+| Category | Git-native model-migration control plane | Broader and more durable than a Promptfoo wrapper |
+| Decision endpoint | Material regression: yes/no with uncertainty | Human-labelable and directly tied to shipping risk |
+| Outcomes | Safe, unsafe, insufficient evidence | Never force ambiguity into pass/fail |
 
-## Key principle: harness generalizes, rubrics don't
+## Workflow
 
-- A single universal judge prompt across code+text+agent+RAG will be mediocre at all.
-- What generalizes = the **harness** (calibration + meta-metrics loop).
-- What stays domain-specific = the **rubric packs** (contributable via PR → distribution engine).
+| Decision | Choice | Reason |
+|---|---|---|
+| Primary surface | Local CLI + committed lockfile + required PR check | Fits existing developer release workflow |
+| First integration | Promptfoo result import | Mature OSS runner; do not rebuild it |
+| Neutral contract | Versioned paired JSONL | Prevents dependency on any one eval tool |
+| Human review | Blind, seeded, stratified, resumable | Reduces bias and makes selection reproducible |
+| CI behavior | Non-interactive lockfile verification | CI must not invent human labels |
+| Production ingest | OpenTelemetry export after MVP | Standard over proprietary instrumentation |
 
-## Bootstrap labeling rule (trust-critical)
+## Technical
 
-The model that **drafts** gold labels must be **different / stronger** than the
-judge being tested. Otherwise you're grading a student with its own answer key.
-The harness should enforce or at least warn on this.
+| Decision | Choice | Reason |
+|---|---|---|
+| Calibration | Stratum-weighted beta-binomial baseline | Transparent, simulatable, and easy to audit |
+| Pairwise judge | Both response orders, forced schema, quoted evidence | Makes position bias and invalid output visible |
+| Artifact store | Local JSONL/JSON; raw evidence gitignored | Portable and privacy-preserving |
+| Lockfile | Hash all evidence, labels, policy, rubric, seed, and method | Reproducible approval without committing raw content |
+| Optional runner | Thin LiteLLM path, cut first | Convenience only; not differentiation |
+| Test bar | Offline adapter/golden/simulation tests | No paid API calls required for correctness |
 
-## Anti-patterns to avoid (decided against)
+## OSS and revenue
 
-- **No mid-verdict "nudging."** Letting a user steer the judge mid-reasoning just
-  injects their bias. Iteration happens at **rubric-design** time; then you
-  **freeze** the judge. A frozen judge is a trustworthy judge.
-- **No silent garbage.** If schema validation fails, refuse to emit a verdict.
-- **Speed is not the first priority.** Correctness of the rubric/gold loop first;
-  optimize the harness for speed once the rubric is stable.
+| Decision | Choice |
+|---|---|
+| License | MIT |
+| OSS boundary | Import, audit, calibration, policy, lockfile, report, CI check |
+| Enterprise value | Shared evidence, model inventory, VPC workers, governance, approvals, SSO/RBAC, audit logs, support |
+| Hosted trigger | Multiple developers at one company demand coordination or controls |
 
-## Design principles (OSS-friendly)
+## Anti-patterns
 
-- **Config in, report out.** No hidden state. A judge run = a file you can commit and diff.
-- **Rubrics are data, not code.** YAML/JSON so people contribute packs via PR.
-- **Bring-your-own-model.** Thin adapter layer; don't lock to one provider.
-- **Everything reproducible.** Same config + seed → same report. This *is* the trust.
+- Do not build a general-purpose eval framework, provider catalog, metric zoo,
+  experiment tracker, observability dashboard, or model router.
+- Do not expose provider secrets to untrusted fork pull requests.
+- Do not upload prompts, responses, labels, or reports without explicit policy.
+- Do not call a raw automated score a migration confidence value.
+- Do not build the enterprise control plane before OSS usage pulls the product
+  into teams.
+- Do not ship if calibration merely reformats the same conclusion produced by
+  existing tools.
 
-## Opinionated defaults (bake in)
+## Validation required before expansion
 
-- `temperature=0` + forced JSON schema (kills most flakiness).
-- Auto A/B order swap + report `flip_rate` (kills position bias).
-- Require per-criterion justification (kills opacity).
-- Ship starter gold sets per domain (~20 each) to lower activation energy.
-- Make the report a committable markdown file (people paste `agreement: 0.94` in
-  READMEs → free marketing, normalizes citing a judge's trust score).
-
-## Open questions
-
-- Name: "JudgeHarness" is a working title — gut-check later.
-- v2 mechanistic tier: which open-weight models to support first (Llama / Qwen /
-  Gemma / GPT-OSS)? Neuronpedia integration for J-lens?
-- Bootstrap: fully-auto with confidence threshold vs. always human-in-the-loop?
-- Report format: markdown + JSON is decided; add an HTML/dashboard view later?
+Run three real migrations through existing tooling and JudgeHarness. At least
+one must show a material raw-vs-calibrated conclusion change, and two of three
+must demonstrate a clearer audit trail, fewer labels, or a caught evaluator
+mistake. Otherwise contribute the calibration feature upstream rather than
+creating a separate product.
