@@ -1,5 +1,10 @@
 # 10 — GTM: YC + Product Hunt
 
+> **Historical plan, superseded July 21, 2026.** Verifier certification and the
+> free web grader are not the current launch path. The active developer motion is
+> OSS CLI → migration lockfile → required PR check → enterprise control plane.
+> See [`../plan.md`](../plan.md#part-iii--mvp-implementation-plan).
+
 Two motions, one product. YC = the pitch. Product Hunt = the launch of Layer 1.
 
 ## YC positioning

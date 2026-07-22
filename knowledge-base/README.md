@@ -1,40 +1,45 @@
-# JudgeHarness Knowledge Base
+# JudgeHarness knowledge base
 
-Everything needed to build JudgeHarness: the vision, the decisions we've locked,
-the trust metrics, and the interpretability research that underpins the "look
-inside the judge" ambition.
+Research and decision history for JudgeHarness. The current product is a
+Git-native model-migration control plane; Part III of [`../plan.md`](../plan.md)
+and [`../DESIGN.md`](../DESIGN.md) are authoritative where older research
+conflicts.
 
-## Index
+## Current product spine
 
-| File | What's in it |
+| File | Purpose |
 |---|---|
-| [`00-vision.md`](./00-vision.md) | The thesis, the Dario quote, the problem, the "output vs. thought" framing |
-| [`01-brainstorm-decisions.md`](./01-brainstorm-decisions.md) | Every decision locked so far + open questions |
-| [`02-trust-metrics.md`](./02-trust-metrics.md) | The meta-metrics that make up a judge's "trust score" |
-| [`03-interpretability-techniques.md`](./03-interpretability-techniques.md) | Transformer Circuits techniques (SAEs, attribution graphs, etc.), black-box vs white-box |
-| [`04-global-workspace-jlens.md`](./04-global-workspace-jlens.md) | Deep notes on the 2026 Global Workspace / Jacobian lens paper |
-| [`05-technique-to-judge-check.md`](./05-technique-to-judge-check.md) | The core mapping: each technique → a concrete judge-trust check |
-| [`06-architecture.md`](./06-architecture.md) | Harness architecture, core objects, pipeline, CLI |
-| [`07-references.md`](./07-references.md) | Papers, links, reading order |
-| [`08-market-and-pivot.md`](./08-market-and-pivot.md) | Why "eval a judge" doesn't sell; the pivot to certifying verifiers/reward models; adjacent markets |
-| [`09-product-three-layers.md`](./09-product-three-layers.md) | One engine, three surfaces: free grader → OSS CLI → B2B certification |
-| [`10-gtm-yc-and-product-hunt.md`](./10-gtm-yc-and-product-hunt.md) | YC positioning + application drafts; Product Hunt launch plan |
+| [`00-vision.md`](./00-vision.md) | Current migration problem, thesis, and infrastructure vision |
+| [`01-brainstorm-decisions.md`](./01-brainstorm-decisions.md) | Locked product, workflow, technical, and OSS decisions |
+| [`06-architecture.md`](./06-architecture.md) | Canonical artifacts and OSS/enterprise system boundaries |
+| [`09-product-three-layers.md`](./09-product-three-layers.md) | OSS local → Git workflow → enterprise control plane |
 
-## The one-paragraph pitch
+## Technical research retained
 
-LLM-as-judge is a black box you're forced to trust on vibes. JudgeHarness makes
-it measurable: it scores how much a judge agrees with you (agreement), how stable
-it is (consistency), and how biased it is (position bias, self-preference) — then
-hands you a frozen, reproducible judge config. Two tiers: **behavioral** checks
-that work on any API model (ships first), and **mechanistic** checks (J-lens,
-attribution graphs) that read the judge's *unspoken* reasoning on open-weight
-models (the moat).
+| File | Purpose |
+|---|---|
+| [`02-trust-metrics.md`](./02-trust-metrics.md) | Agreement, consistency, position bias, self-preference, calibration |
+| [`03-interpretability-techniques.md`](./03-interpretability-techniques.md) | Black-box and mechanistic evaluator research; post-MVP |
+| [`04-global-workspace-jlens.md`](./04-global-workspace-jlens.md) | 2026 Global Workspace / Jacobian-lens notes; post-MVP |
+| [`05-technique-to-judge-check.md`](./05-technique-to-judge-check.md) | Technique-to-check mapping; historical/future research |
+| [`07-references.md`](./07-references.md) | Papers, links, and reading order |
 
-## The spine (memorize this)
+## Historical market explorations
 
-- **Repeatable** → self-consistency
-- **Mechanical / impartial** → bias scores (position, self-preference)
-- **Transparent** → per-criterion breakdown (v1) + workspace readout (v2)
+| File | Status |
+|---|---|
+| [`08-market-and-pivot.md`](./08-market-and-pivot.md) | Superseded verifier/reward-model positioning research |
+| [`10-gtm-yc-and-product-hunt.md`](./10-gtm-yc-and-product-hunt.md) | Superseded certification/launch plan |
 
-> A trustworthy judge isn't one with a nice-sounding rationale — it's one whose
-> *unspoken* workspace agrees with its verdict.
+These files are kept to preserve the reasoning trail, not as current
+implementation instructions.
+
+## Current pitch
+
+JudgeHarness imports the evals developers already run, audits the automated
+evaluator against a small blind human sample, corrects the estimated regression
+rate, and binds the resulting migration decision to a reproducible lockfile and
+required pull-request check.
+
+> **Change the model in a PR, attach audited evidence, and let CI verify that it
+> is still safe to ship.**

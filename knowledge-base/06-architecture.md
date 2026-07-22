@@ -1,92 +1,63 @@
 # 06 — Architecture
 
-See also the top-level [`DESIGN.md`](../DESIGN.md). This file is the fuller version.
+The maintained architecture specification is [`../DESIGN.md`](../DESIGN.md).
+This page records the conceptual boundaries used by the rest of the knowledge
+base.
 
-## Mental model
+## System boundary
 
-JudgeHarness is a **meta-eval**: config in → report out, fully reproducible.
-It doesn't judge outputs; it measures whether *your judge* can be trusted to.
+JudgeHarness sits after an eval runner and before a production release:
 
-## Core objects (~4)
-
-```yaml
-# 1. Dataset — your calibration / gold set (the answer key)
-dataset:
-  - id: ex1
-    input: "..."          # thing being judged (or an A/B pair)
-    gold: "A"             # human verdict — the ground truth
-    meta: { domain: code }
-
-# 2. Judge — a frozen, versioned config
-judge:
-  id: code-review-v3
-  model: gpt-5-mini
-  mode: pairwise          # or "score"
-  temperature: 0
-  rubric: ./rubrics/code_review.yaml
-  output_schema: per_criterion
-
-# 3. Rubric — domain-specific criteria (contributable pack)
-rubric:
-  criteria:
-    - { name: correctness, weight: 0.5, guide: "compiles & handles edge cases?" }
-    - { name: clarity,     weight: 0.3 }
-    - { name: security,    weight: 0.2 }
-
-# 4. Report — auto-generated, committable
-report:
-  judge: code-review-v3
-  agreement: 0.94
-  flip_rate: 0.02
-  self_consistency: 0.97
-  cost_per_judge: 0.0011
+```text
+Promptfoo / DeepEval / internal system / paired JSONL
+                         ↓
+              canonical paired evidence
+                         ↓
+          blind audit + judge calibration
+                         ↓
+               migration policy gate
+                         ↓
+            decision lockfile + PR check
 ```
 
-## Pipeline (5 stages)
+It may fill missing judgments through LiteLLM, but execution is not the core.
+The stable interfaces are:
 
-1. **Load** dataset + judge config.
-2. **Expand** into runs: N repeats × A/B-swapped × candidate models × prompt variants.
-3. **Execute** (async; **cache by hash** — never re-pay for a run you've done).
-4. **Score** vs. gold + compute meta-metrics (see `02-trust-metrics.md`).
-5. **Report** — markdown + JSON leaderboard.
+- `ResultAdapter` — converts external results while preserving provenance;
+- `ArtifactStore` — stores canonical pairs, judgments, labels, and decisions;
+- `JudgeProvider` — optionally creates missing structured judgments.
 
-## CLI commands
+## Canonical artifacts
 
-| Command | Purpose |
-|---|---|
-| `init` | Scaffold a project + starter gold sets per domain |
-| `label` | Bootstrap-assisted answer key (stronger model drafts, human confirms) |
-| `sweep` | The money command: {models}×{prompts}×{temp}, order-swapped, N repeats |
-| `report` | Committable markdown + JSON |
-| `check` (v2) | Run mechanistic checks (logit/J-lens) on an open-weight judge |
+| Artifact | Purpose | Committed by default? |
+|---|---|---|
+| `pairs.jsonl` | Normalized incumbent/challenger evidence | No |
+| `judgments.jsonl` | Automated verdicts, criteria, swaps, evidence | No |
+| `audit-labels.jsonl` | Append-only blind human labels | Only when safe |
+| `judgeharness.yaml` | Migration policy and adapter mapping | Yes |
+| `rubric.yaml` | Definition of material regression | Yes |
+| `decision.lock.json` | Hashes, method, calibrated result, outcome | Yes |
+| `report.md` / `report.html` | Reviewable explanation | Policy-controlled |
 
-### The money command
+## OSS execution model
 
-```bash
-judgeharness sweep \
-  --dataset gold.yaml \
-  --models gpt-5-mini,claude-sonnet,gemini-flash \
-  --rubric code_review.yaml \
-  --repeats 5 --swap-order
-```
+- Local-first Python CLI and callable library.
+- JSONL/JSON source of truth; optional SQLite cache only for model calls.
+- Seeded audit sampling and posterior simulation.
+- No telemetry or hosted account.
+- GitHub Action uses `judgeharness check` and stable exit codes.
+- Untrusted fork PRs receive no provider keys and make no paid calls.
 
-## Stack
+## Enterprise substitution points
 
-- Python · `pydantic` (schemas) · `litellm` (multi-provider adapter) ·
-  local SQLite/JSON cache. No server, no DB. Runs in CI.
-- **v2 mechanistic**: `transformer-lens` / `nnsight` for activation access;
-  Neuronpedia for J-lens vectors on open-weight models. Start with a
-  dependency-light **logit lens** before full J-lens/SAE tooling.
+The enterprise control plane replaces local storage and coordination, not the
+decision method:
 
-## Trust-by-default (baked in)
+- filesystem → object storage and metadata database;
+- local process → customer-VPC workers and queue;
+- opaque local reviewer → SSO identity and approval chain;
+- one repository → organization model inventory and deprecation calendar;
+- local history → immutable audit log and scheduled revalidation.
 
-- `temperature=0` + forced JSON schema.
-- Auto A/B order swap + report `flip_rate`.
-- Require per-criterion justification; refuse verdict on schema-validation failure.
-- `label` enforces/warns: drafting model must differ from judge under test.
-
-## Non-goals
-
-- Not a public benchmark (those test *models*, not *your judge*).
-- No mid-verdict nudging — iterate the rubric, then **freeze** the judge.
-- Speed is a later concern; correctness of the rubric/gold loop comes first.
+The decision lockfile remains portable across OSS, cloud, and private
+deployments.

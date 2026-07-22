@@ -1,79 +1,107 @@
 # JudgeHarness
 
-> "AI might be smart enough for this: it is the first technology capable of
-> making broad, fuzzy judgements in a repeatable and mechanical way."
-> — Dario Amodei, *Machines of Loving Grace*
+> Infrastructure for approving LLM model migrations with evidence you can trust.
 
-There's just one problem: today it doesn't.
+Model providers retire and replace models continuously. The hard part is not
+calling the old and new APIs; Promptfoo, DeepEval, and internal eval systems
+already do that. The hard part is deciding whether the automated evaluator is
+reliable enough to authorize the production change.
 
-Ask an LLM "which output is better?" twice and you'll often get two answers.
-Swap the order of the options and the verdict flips. Ask *why* and you get a
-number with no reasoning. **Fuzzy judgment, delivered in a fuzzy, irreproducible
-way** — the opposite of what makes a judge trustworthy.
+JudgeHarness is an MIT-licensed, local-first **migration audit and decision
+layer**. It imports paired incumbent/challenger results, selects a small blind
+human-audit sample, measures evaluator error, propagates that error into the
+estimated regression rate, and produces one of three outcomes:
 
-JudgeHarness is the missing repeatability layer for LLM-as-judge. It measures how
-much your judge actually agrees with you, how stable it is, and how biased it is —
-then hands you a **frozen, reproducible judge config** you can commit, cite, and ship.
+- **safe to migrate**;
+- **do not migrate**;
+- **insufficient evidence**, with the next cases to label.
 
-## The three properties of a trustworthy judge
+## Planned developer workflow
 
-| Property (from the essay) | What it means | How we measure it |
-|---|---|---|
-| **Repeatable** | Same input → same verdict | Self-consistency across N runs |
-| **Mechanical / impartial** | No hidden thumb on the scale | Position-bias & self-preference scores |
-| **Transparent** | You can see *why* | Per-criterion scores + required justification |
-
-If a judge can't clear all three, you shouldn't trust its verdicts. Most can't —
-until you tune them against real examples.
-
-## How it works
-
-1. **Give it an answer key.** 20–30 examples where *you* know the right verdict.
-2. **Sweep.** JudgeHarness tries your candidate models, prompts, and settings —
-   running each multiple times with the options order-swapped.
-3. **Get a leaderboard.** Ranked by agreement × consistency × cost.
-4. **Freeze the winner.** Ship a judge config that's reproducible by design.
-
-## The one command that matters
+JudgeHarness integrates with Git rather than asking developers to adopt another
+hosted eval dashboard.
 
 ```bash
-judgeharness sweep \
-  --dataset gold.yaml \
-  --models gpt-5-mini,claude-sonnet,gemini-flash \
-  --rubric code_review.yaml \
-  --repeats 5 --swap-order
+# Run the eval tool you already use
+promptfoo eval --output results.json
+
+# Import, audit, and lock the migration decision
+judgeharness import promptfoo results.json --run ./migration-audit
+judgeharness audit ./migration-audit
+judgeharness decide ./migration-audit \
+  --lock evals/model-migration/decision.lock.json
+
+# Verify the committed evidence in CI
+judgeharness check
 ```
 
+The migration PR contains the model/config change plus a reviewable lockfile.
+The GitHub Action verifies hashes, recalculates the decision, rejects stale or
+insufficient evidence, and posts a compact Step Summary. Raw prompts, responses,
+provider payloads, and caches remain local and gitignored by default.
+
+## What JudgeHarness owns
+
+```text
+Promptfoo / DeepEval / internal eval / paired JSONL
+                         │
+                         ▼
+              canonical evidence ledger
+                         │
+             blind stratified human audit
+                         │
+                         ▼
+             evaluator-error calibration
+                         │
+                         ▼
+             migration policy + lockfile
+                         │
+                         ▼
+                 required PR check
 ```
-Config                        Agreement  Consistency  FlipRate  $/judge
-gpt-5-mini + rubric-v3          0.94        0.97        0.02     $0.0011  ★
-claude-sonnet + rubric-v3       0.96        0.91        0.05     $0.0090
-gemini-flash + rubric-v3        0.88        0.95        0.03     $0.0004
-```
 
-Stop trusting your judge on vibes. Measure it.
+The first adapter is Promptfoo. A stable paired JSONL contract prevents it from
+becoming a Promptfoo wrapper, and later adapters can consume DeepEval, Driftcut,
+OpenTelemetry exports, or internal evaluation results.
 
-## Two tiers of judge trust
+## Why calibration matters
 
-- **Behavioral** (black-box, any API model, ships first) — causal input/rubric
-  perturbations: order-swap, criterion ablation, authority injection, cross-generator.
-- **Mechanistic** (white-box, open-weight only, the moat) — read the judge's
-  *unspoken* reasoning with the logit/Jacobian lens and SAE features.
+A conventional eval report treats automated scores as observations. But the
+judge can be biased, order-sensitive, or confidently wrong. JudgeHarness audits
+a seeded sample blindly, estimates the true material-regression prevalence
+within relevant strata, and carries human-label uncertainty into the final
+decision.
 
-> A trustworthy judge isn't one with a nice-sounding rationale — it's one whose
-> *unspoken* workspace agrees with its verdict.
+The report always shows the raw automated result beside the human-corrected
+estimate. If the evidence cannot support the configured migration threshold,
+JudgeHarness refuses to manufacture a pass.
+
+## OSS and enterprise boundary
+
+The complete individual workflow stays open source: importers, canonical
+artifacts, audit sampling and labeling, calibration, policy gates, reports,
+lockfiles, and CI verification.
+
+An enterprise control plane can later add shared datasets and rubrics, managed or
+VPC workers, SSO/RBAC, approval chains, immutable audit logs, fleet-wide model
+inventory, scheduled revalidation, private deployment, and support. The OSS
+lockfile and decision semantics remain the source of truth.
+
+## Scope
+
+JudgeHarness is not another general-purpose eval framework, provider catalog,
+observability platform, model router, or metric library. It integrates with
+those systems and owns the path from evaluation evidence to an approved or
+blocked migration.
 
 ## Status
 
-Early / brainstorm stage.
+Planning and implementation design. The current canonical build plan is
+[`plan.md`](./plan.md#part-iii--mvp-implementation-plan).
 
-- Design notes: [`DESIGN.md`](./DESIGN.md)
-- Full knowledge base (vision, decisions, trust metrics, interpretability
-  research, technique→check mapping): [`knowledge-base/`](./knowledge-base/)
-- Direction & GTM: the wedge is certifying **verifiers / reward models** (the
-  graders that train AI), shipped as one engine behind three surfaces — a free
-  grader, an OSS CLI, and a B2B certification platform. See knowledge-base
-  [`08`](./knowledge-base/08-market-and-pivot.md)–[`10`](./knowledge-base/10-gtm-yc-and-product-hunt.md).
+- Product and artifact design: [`DESIGN.md`](./DESIGN.md)
+- Research and prior decisions: [`knowledge-base/`](./knowledge-base/)
+- Positioning: [`positioning.md`](./positioning.md)
 
 ## License
 
