@@ -5,3 +5,17 @@ __pycache__/
 .cache/
 *.sqlite
 .DS_Store
+
+# build / packaging
+*.egg-info/
+build/
+dist/
+
+# local test projects + generated run artifacts (testrun/ holds a real API key!)
+/demo-support/
+/testrun/
+runs/
+inputs.yaml
+report.md
+report.json
+*.log

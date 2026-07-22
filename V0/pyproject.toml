@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metanoia"
+version = "0.1.0"
+description = "Transparent LLM judges for vendor/model selection. Describe a use case, get a validated, inspectable model recommendation across quality/latency/cost."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Shaurya Jain" }]
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "click>=8.1",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+# Real model calls. Mock mode works without this.
+live = ["litellm>=1.44"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+metanoia = "metanoia.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/metanoia"]
